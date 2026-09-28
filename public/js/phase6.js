@@ -1,5 +1,4 @@
 const Phase6 = {
-const Phase6 = {
 
   fmtDate(d) {
     return !d
@@ -64,15 +63,7 @@ const Phase6 = {
 
     try {
 
-      // ---------------------------------------------------------
-      // Load dashboard data
-      // ---------------------------------------------------------
-
       const r = await this.apiFetch('/api/dashboard');
-
-      // ---------------------------------------------------------
-      // Handle API errors
-      // ---------------------------------------------------------
 
       if (!r.ok) {
 
@@ -95,7 +86,7 @@ const Phase6 = {
           ">
 
             <h3 style="margin-top:0;">
-              ⚠️ Dashboard API Error
+              Dashboard API Error
             </h3>
 
             <p>
@@ -124,10 +115,6 @@ const Phase6 = {
         return;
       }
 
-      // ---------------------------------------------------------
-      // Parse successful API response
-      // ---------------------------------------------------------
-
       const data = await r.json();
 
       const {
@@ -136,10 +123,6 @@ const Phase6 = {
         recentActivity,
         overdueIssues
       } = data;
-
-      // ---------------------------------------------------------
-      // Protect against missing arrays
-      // ---------------------------------------------------------
 
       const upcomingMonitoringList =
         Array.isArray(upcomingMonitoring)
@@ -155,10 +138,6 @@ const Phase6 = {
         Array.isArray(overdueIssues)
           ? overdueIssues
           : [];
-
-      // ---------------------------------------------------------
-      // Upcoming monitoring
-      // ---------------------------------------------------------
 
       const upcomingRows = upcomingMonitoringList
         .map(m => `
@@ -223,10 +202,6 @@ const Phase6 = {
           </div>
         `;
 
-      // ---------------------------------------------------------
-      // Recent activity
-      // ---------------------------------------------------------
-
       const activityRows = recentActivityList
         .map(a => `
           <div style="
@@ -265,10 +240,6 @@ const Phase6 = {
             No recent activity.
           </div>
         `;
-
-      // ---------------------------------------------------------
-      // Overdue issues
-      // ---------------------------------------------------------
 
       const overdueRows = overdueIssuesList
         .map(i => `
@@ -320,23 +291,15 @@ const Phase6 = {
             color:#10b981;
             font-size:13px;
           ">
-            ✅ No overdue issues!
+            No overdue issues.
           </div>
         `;
-
-      // ---------------------------------------------------------
-      // KPI values with safe defaults
-      // ---------------------------------------------------------
 
       const projects = kpis?.projects || {};
       const tenders = kpis?.tenders || {};
       const contracts = kpis?.contracts || {};
       const tecs = kpis?.tecs || {};
       const monitoring = kpis?.monitoring || {};
-
-      // ---------------------------------------------------------
-      // Render dashboard
-      // ---------------------------------------------------------
 
       container.innerHTML = `
 
@@ -345,7 +308,7 @@ const Phase6 = {
           <div class="page-header-text">
 
             <h2>
-              📊 Executive Dashboard
+              Executive Dashboard
             </h2>
 
             <p>
@@ -356,17 +319,12 @@ const Phase6 = {
 
         </div>
 
-
-        <!-- KPI CARDS -->
-
         <div style="
           display:grid;
           grid-template-columns:repeat(4, 1fr);
           gap:16px;
           margin-bottom:20px;
         ">
-
-          <!-- Total Projects -->
 
           <div class="table-card" style="
             padding:20px;
@@ -402,9 +360,6 @@ const Phase6 = {
 
           </div>
 
-
-          <!-- Active Tenders -->
-
           <div class="table-card" style="
             padding:20px;
             text-align:center;
@@ -439,9 +394,6 @@ const Phase6 = {
 
           </div>
 
-
-          <!-- Total Contracts -->
-
           <div class="table-card" style="
             padding:20px;
             text-align:center;
@@ -475,9 +427,6 @@ const Phase6 = {
             </div>
 
           </div>
-
-
-          <!-- Open Issues -->
 
           <div class="table-card" style="
             padding:20px;
@@ -515,22 +464,13 @@ const Phase6 = {
 
         </div>
 
-
-        <!-- MAIN DASHBOARD -->
-
         <div style="
           display:grid;
           grid-template-columns:2fr 1fr;
           gap:20px;
         ">
 
-
-          <!-- LEFT COLUMN -->
-
           <div>
-
-
-            <!-- Upcoming Monitoring -->
 
             <div class="table-card" style="
               margin-bottom:20px;
@@ -544,7 +484,7 @@ const Phase6 = {
                 <div class="table-title">
 
                   <h3 style="margin:0;">
-                    📅 Upcoming Monitoring
+                    Upcoming Monitoring
                   </h3>
 
                 </div>
@@ -556,9 +496,6 @@ const Phase6 = {
               </div>
 
             </div>
-
-
-            <!-- Overdue Items -->
 
             <div class="table-card">
 
@@ -573,7 +510,7 @@ const Phase6 = {
                     margin:0;
                     color:#dc2626;
                   ">
-                    ⚠️ Overdue Items
+                    Overdue Items
                   </h3>
 
                 </div>
@@ -587,9 +524,6 @@ const Phase6 = {
             </div>
 
           </div>
-
-
-          <!-- RIGHT COLUMN -->
 
           <div>
 
@@ -605,7 +539,7 @@ const Phase6 = {
                 <div class="table-title">
 
                   <h3 style="margin:0;">
-                    🕒 Recent Activity
+                    Recent Activity
                   </h3>
 
                 </div>
@@ -642,7 +576,7 @@ const Phase6 = {
         ">
 
           <h3 style="margin-top:0;">
-            ⚠️ Error rendering dashboard
+            Error rendering dashboard
           </h3>
 
           <p>
@@ -663,7 +597,6 @@ const Phase6 = {
     }
   }
 };
-
 
 if (typeof window !== 'undefined') {
   window.Phase6 = Phase6;
