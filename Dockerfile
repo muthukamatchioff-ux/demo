@@ -1,6 +1,11 @@
-FROM node:18-alpine AS builder
+FROM node:18-bookworm-slim AS builder
 
 WORKDIR /app
+
+# Install OpenSSL for Prisma
+RUN apt-get update \
+    && apt-get install -y openssl \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy package files
 COPY package.json package-lock.json ./
@@ -9,31 +14,37 @@ RUN npm ci
 # Copy source
 COPY . .
 
-# Generate Prisma client and build TypeScript
+# Generate Prisma client
 RUN npx prisma generate
+
+# Build TypeScript
 RUN npm run build
 
+
 # Production image
-FROM node:18-alpine
+FROM node:18-bookworm-slim
 
 WORKDIR /app
 
-# Install production dependencies only
+# Install OpenSSL for Prisma
+RUN apt-get update \
+    && apt-get install -y openssl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install production dependencies
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
-# Copy generated Prisma and dist files from builder
+# Copy generated Prisma and application files
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/prisma ./prisma
 COPY public ./public
 
-# Set environment
 ENV NODE_ENV=production
 ENV PORT=8080
 
 EXPOSE 8080
 
-# Start application (runs migrations first if needed, then starts)
 CMD ["sh", "-c", "npx prisma migrate deploy && node dist/server.js"]
