@@ -1303,13 +1303,68 @@ router.put('/monitoring/:id/actions/:actionId', async (req: any, res: any) => {
 // GET /api/dashboard
 router.get('/dashboard', async (req: any, res: any) => {
   try {
-    const role = req.session.role;
-    const projectId = req.query.projectId as string || '';
-    const projWhere = projectId ? { id: projectId, deletedAt: null } : { deletedAt: null };
-    const baseWhere = projectId ? { projectId, deletedAt: null } : { deletedAt: null };
-    const issueWhere = projectId ? { monitoring: { projectId }, status: 'Open' } : { status: 'Open' };
-    const actionWhere = projectId ? { monitoring: { projectId }, status: 'Pending' } : { status: 'Pending' };
+    const projectId = String(req.query.projectId || '').trim();
 
+    console.log('[DASHBOARD] Request received', {
+      projectId: projectId || '(all projects)',
+      userId: req.session?.userId,
+      role: req.session?.role,
+    });
+
+    // Validate the selected project before running dashboard queries.
+    if (projectId) {
+      const project = await prisma.project.findFirst({
+        where: { id: projectId, deletedAt: null },
+        select: {
+          id: true,
+          projectCode: true,
+          projectName: true,
+          status: true,
+        },
+      });
+
+      if (!project) {
+        return res.status(404).json({
+          error: 'Project not found',
+          projectId,
+        });
+      }
+    }
+
+    // Project-level filters.
+    const projectWhere: any = { deletedAt: null };
+    const baseWhere: any = { deletedAt: null };
+
+    if (projectId) {
+      projectWhere.id = projectId;
+      baseWhere.projectId = projectId;
+    }
+
+    // Monitoring child records are filtered through their monitoring relation.
+    const issueWhere: any = { status: 'Open' };
+    const actionWhere: any = { status: 'Pending' };
+
+    if (projectId) {
+      issueWhere.monitoring = { projectId };
+      actionWhere.monitoring = { projectId };
+    }
+
+    // Run each query separately so Render logs identify the exact failing query.
+    const dashboardQuery = async (name: string, query: () => Promise<any>) => {
+      try {
+        const result = await query();
+        console.log(`[DASHBOARD OK] ${name}`);
+        return result;
+      } catch (error: any) {
+        console.error(`[DASHBOARD FAILED] ${name}`);
+        console.error('Message:', error?.message);
+        console.error('Code:', error?.code);
+        console.error('Meta:', error?.meta);
+        throw error;
+      }
+    };
+
+    // KPI counts.
     const [
       totalProjects,
       activeProjects,
@@ -1320,61 +1375,175 @@ router.get('/dashboard', async (req: any, res: any) => {
       totalDocuments,
       totalMonitoring,
       openIssues,
-      pendingActions
+      pendingActions,
     ] = await Promise.all([
-      prisma.project.count({ where: projWhere }),
-      prisma.project.count({ where: { ...projWhere, status: 'In Progress' } }),
-      prisma.tender.count({ where: baseWhere }),
-      prisma.tender.count({ where: { ...baseWhere, status: 'Published' } }),
-      prisma.tec.count({ where: baseWhere }),
-      prisma.contract.count({ where: baseWhere }),
-      prisma.document.count({ where: baseWhere }),
-      prisma.monitoring.count({ where: baseWhere }),
-      prisma.issue.count({ where: issueWhere }),
-      prisma.followUpAction.count({ where: actionWhere })
+      dashboardQuery('totalProjects', () =>
+        prisma.project.count({ where: projectWhere })
+      ),
+
+      dashboardQuery('activeProjects', () =>
+        prisma.project.count({
+          where: { ...projectWhere, status: 'In Progress' },
+        })
+      ),
+
+      dashboardQuery('totalTenders', () =>
+        prisma.tender.count({ where: baseWhere })
+      ),
+
+      dashboardQuery('activeTenders', () =>
+        prisma.tender.count({
+          where: { ...baseWhere, status: 'Published' },
+        })
+      ),
+
+      dashboardQuery('totalTecs', () =>
+        prisma.tec.count({ where: baseWhere })
+      ),
+
+      dashboardQuery('totalContracts', () =>
+        prisma.contract.count({ where: baseWhere })
+      ),
+
+      dashboardQuery('totalDocuments', () =>
+        prisma.document.count({ where: baseWhere })
+      ),
+
+      dashboardQuery('totalMonitoring', () =>
+        prisma.monitoring.count({ where: baseWhere })
+      ),
+
+      dashboardQuery('openIssues', () =>
+        prisma.issue.count({ where: issueWhere })
+      ),
+
+      dashboardQuery('pendingActions', () =>
+        prisma.followUpAction.count({ where: actionWhere })
+      ),
     ]);
 
-    // Fetch upcoming monitoring
-    const upcomingMonitoring = await prisma.monitoring.findMany({
-      where: { ...baseWhere, status: 'Scheduled', monitoringDate: { gte: new Date() } },
-      orderBy: { monitoringDate: 'asc' },
-      take: 5,
-      include: { project: { select: { projectCode: true } } }
-    });
+    // Upcoming scheduled monitoring.
+    const upcomingMonitoring = await dashboardQuery(
+      'upcomingMonitoring',
+      () =>
+        prisma.monitoring.findMany({
+          where: {
+            ...baseWhere,
+            status: 'Scheduled',
+            monitoringDate: { gte: new Date() },
+          },
+          orderBy: { monitoringDate: 'asc' },
+          take: 5,
+          include: {
+            project: {
+              select: {
+                id: true,
+                projectCode: true,
+                projectName: true,
+              },
+            },
+          },
+        })
+    );
 
-    // Fetch recent activity from AuditLog
+    // Recent audit activity.
     const auditWhere: any = projectId ? { projectId } : {};
-    const recentActivity = await prisma.auditLog.findMany({
-      where: auditWhere,
-      orderBy: { createdAt: 'desc' },
-      take: 10,
-      include: { user: { select: { username: true } } }
-    });
 
-    // Overdue items
-    const overdueIssues = await prisma.issue.findMany({
-      where: { status: 'Open', targetDate: { lt: new Date() } },
-      orderBy: { targetDate: 'asc' },
-      take: 5,
-      include: { monitoring: { select: { referenceNumber: true } } }
-    });
+    const recentActivity = await dashboardQuery(
+      'recentActivity',
+      () =>
+        prisma.auditLog.findMany({
+          where: auditWhere,
+          orderBy: { createdAt: 'desc' },
+          take: 10,
+          include: {
+            user: {
+              select: { username: true },
+            },
+          },
+        })
+    );
 
-    res.json({
+    // Overdue open issues, restricted to the selected project when applicable.
+    const overdueIssueWhere: any = {
+      status: 'Open',
+      targetDate: { lt: new Date() },
+    };
+
+    if (projectId) {
+      overdueIssueWhere.monitoring = { projectId };
+    }
+
+    const overdueIssues = await dashboardQuery(
+      'overdueIssues',
+      () =>
+        prisma.issue.findMany({
+          where: overdueIssueWhere,
+          orderBy: { targetDate: 'asc' },
+          take: 5,
+          include: {
+            monitoring: {
+              select: {
+                id: true,
+                referenceNumber: true,
+                project: {
+                  select: {
+                    id: true,
+                    projectCode: true,
+                    projectName: true,
+                  },
+                },
+              },
+            },
+          },
+        })
+    );
+
+    return res.json({
       kpis: {
-        projects: { total: totalProjects, active: activeProjects },
-        tenders: { total: totalTenders, active: activeTenders },
-        tecs: { total: totalTecs },
-        contracts: { total: totalContracts },
-        documents: { total: totalDocuments },
-        monitoring: { total: totalMonitoring, openIssues, pendingActions }
+        projects: {
+          total: totalProjects,
+          active: activeProjects,
+        },
+        tenders: {
+          total: totalTenders,
+          active: activeTenders,
+        },
+        tecs: {
+          total: totalTecs,
+        },
+        contracts: {
+          total: totalContracts,
+        },
+        documents: {
+          total: totalDocuments,
+        },
+        monitoring: {
+          total: totalMonitoring,
+          openIssues,
+          pendingActions,
+        },
       },
       upcomingMonitoring,
       recentActivity,
-      overdueIssues
+      overdueIssues,
     });
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: 'Server error' });
+  } catch (error: any) {
+    console.error('════════════════════════════════════════════════════════════');
+    console.error('[DASHBOARD FATAL ERROR]');
+    console.error('Message:', error?.message);
+    console.error('Code:', error?.code);
+    console.error('Meta:', error?.meta);
+    console.error('Stack:', error?.stack);
+    console.error('════════════════════════════════════════════════════════════');
+
+    return res.status(500).json({
+      error: 'Server error',
+      message:
+        process.env.NODE_ENV === 'production'
+          ? 'Dashboard could not be loaded. Check server logs.'
+          : error?.message || 'Unknown error',
+    });
   }
 });
 
