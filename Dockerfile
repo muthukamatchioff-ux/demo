@@ -3,9 +3,11 @@ FROM node:18-bookworm-slim AS builder
 WORKDIR /app
 
 # Install OpenSSL for Prisma
-RUN apt-get update \
-    && apt-get install -y openssl \
-    && rm -rf /var/lib/apt/lists/*
+<<<<<<< HEAD
+...
+=======
+...
+
 
 # Copy package files
 COPY package.json package-lock.json ./
@@ -27,11 +29,17 @@ FROM node:18-bookworm-slim
 WORKDIR /app
 
 # Install OpenSSL for Prisma
+<<<<<<< HEAD
 RUN apt-get update \
     && apt-get install -y openssl \
     && rm -rf /var/lib/apt/lists/*
 
 # Install production dependencies
+=======
+RUN apk add --no-cache openssl
+
+# Install production dependencies only
+
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
@@ -48,3 +56,10 @@ ENV PORT=8080
 EXPOSE 8080
 
 CMD ["sh", "-c", "npx prisma migrate deploy && node prisma/seed.js && node dist/server.js"]
+
+<<<<<<< HEAD
+CMD ["sh", "-c", "npx prisma migrate deploy && node prisma/seed.js && node dist/server.js"]
+=======
+# Run migrations and start application
+CMD ["sh", "-c", "npx prisma migrate deploy && node dist/server.js"]
+>>>>>>> ec1d3c0 (Fix production session storage)

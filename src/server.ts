@@ -1,5 +1,6 @@
 import express from 'express';
 import session from 'express-session';
+import connectPgSimple from 'connect-pg-simple';
 import path from 'path';
 import dotenv from 'dotenv';
 import cors from 'cors';
@@ -12,6 +13,7 @@ dotenv.config();
 const app = express();
 const prisma = new PrismaClient();
 const PORT = process.env.PORT || 8080;
+const PgSession = connectPgSimple(session);
 
 app.set('trust proxy', 1); // Trust NGINX reverse proxy headers
 
@@ -28,10 +30,19 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 app.use(session({
+  store: new PgSession({
+    conString: process.env.DATABASE_URL,
+    createTableIfMissing: true
+  }),
   secret: process.env.AUTH_SECRET || 'secret',
   resave: false,
   saveUninitialized: false,
-  cookie: { secure: process.env.NODE_ENV === 'production', httpOnly: true, sameSite: 'strict', maxAge: 1000 * 60 * 60 * 24 } // 1 day
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
+    sameSite: 'strict',
+    maxAge: 1000 * 60 * 60 * 24
+  }
 }));
 
 // Middleware to check authentication
