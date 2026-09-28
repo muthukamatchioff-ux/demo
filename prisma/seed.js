@@ -45,17 +45,21 @@ async function main() {
         { username: 'demoviewer', email: 'viewer@demo.com', roleId: createdRoles['Viewer'].id },
     ];
     for (const user of demoUsers) {
-        await prisma.user.upsert({
-            where: { email: user.email },
-            update: {},
-            create: {
-                username: user.username,
-                email: user.email,
-                passwordHash: defaultPassword,
-                roleId: user.roleId,
-                active: true
-            },
-        });
+await prisma.user.upsert({
+    where: { email: user.email },
+    update: {
+        passwordHash: defaultPassword,
+        roleId: user.roleId,
+        active: true,
+    },
+    create: {
+        username: user.username,
+        email: user.email,
+        passwordHash: defaultPassword,
+        roleId: user.roleId,
+        active: true,
+    },
+});
     }
     console.log('Seeding completed.');
 }
