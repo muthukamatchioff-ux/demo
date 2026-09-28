@@ -25,7 +25,28 @@ const Phase6 = {
     container.innerHTML = '<div style="padding:40px;text-align:center;color:#64748b;">Loading Dashboard...</div>';
     try {
       const r = await this.apiFetch('/api/dashboard');
-      if (!r.ok) { container.innerHTML = '<div style="padding:40px;color:red;">Error loading dashboard data.</div>'; return; }
+      if (!r.ok) {
+  const errorText = await r.text();
+
+  console.error('Dashboard API Error:', r.status, errorText);
+
+  container.innerHTML = `
+    <div style="padding:40px;color:red;">
+      <h3>Dashboard API Error</h3>
+      <p>Status: ${r.status}</p>
+      <pre style="
+        background:#f8fafc;
+        padding:15px;
+        border:1px solid #e2e8f0;
+        border-radius:6px;
+        white-space:pre-wrap;
+        text-align:left;
+      ">${errorText}</pre>
+    </div>
+  `;
+
+  return;
+}
       const data = await r.json();
       
       const { kpis, upcomingMonitoring, recentActivity, overdueIssues } = data;
