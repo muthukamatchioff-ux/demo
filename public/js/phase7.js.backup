@@ -1,0 +1,195 @@
+const Phase7 = {
+  fmtDate(d) { return !d ? '—' : new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }); },
+
+  async apiFetch(url, opts = {}) {
+    return fetch(url, { headers: { 'Content-Type': 'application/json' }, ...opts });
+  },
+
+  renderReportsCatalog(container) {
+    container.innerHTML = `
+      <div class="page-header">
+        <div class="page-header-text">
+          <h2>📈 Reports & Exports</h2>
+          <p>Generate, preview, and export system reports</p>
+        </div>
+      </div>
+      
+      <div style="display:grid;grid-template-columns:1fr 3fr;gap:20px;">
+        <!-- Left: Catalog List -->
+        <div class="table-card" style="padding:16px;">
+          <h4 style="margin-top:0;color:#0b2545;border-bottom:1px solid #e2e8f0;padding-bottom:10px;">Report Catalog</h4>
+          <ul style="list-style:none;padding:0;margin:0;">
+            ${this.reportDef('projects', 'Project Report', 'Overview of all PM-SETU projects')}
+            ${this.reportDef('tenders', 'Tender Report', 'Published tenders and statuses')}
+            ${this.reportDef('tec', 'TEC / Evaluation Report', 'Technical evaluation committees')}
+            ${this.reportDef('contracts', 'Contract Report', 'Awarded contracts and values')}
+            ${this.reportDef('documents', 'Document Report', 'Central document registry')}
+            ${this.reportDef('monitoring', 'Monitoring Report', 'Site inspections & virtual meetings')}
+            ${this.reportDef('issues', 'Issues / Follow-up Report', 'Tracked deficiencies and tasks')}
+          </ul>
+        </div>
+        
+        <!-- Right: Report Viewer -->
+        <div id="report-viewer-container" class="table-card" style="padding:20px;">
+          <div style="text-align:center;color:#64748b;padding:40px;">
+            <div style="font-size:40px;margin-bottom:16px;">📊</div>
+            Select a report from the catalog to configure and preview.
+          </div>
+        </div>
+      </div>
+    `;
+  },
+
+  reportDef(type, title, desc) {
+    return `
+      <li style="margin-bottom:8px;">
+        <button onclick="Phase7.loadReportConfig('${type}', '${title}')" style="width:100%;text-align:left;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;cursor:pointer;transition:all 0.2s;">
+          <div style="font-weight:600;color:#0b2545;">${title}</div>
+          <div style="font-size:12px;color:#64748b;margin-top:4px;">${desc}</div>
+        </button>
+      </li>
+    `;
+  },
+
+  loadReportConfig(type, title) {
+    const v = document.getElementById('report-viewer-container');
+    if (!v) return;
+
+    v.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #e2e8f0;padding-bottom:16px;margin-bottom:20px;">
+        <div>
+          <h3 style="margin:0;color:#0b2545;">${title}</h3>
+          <p style="margin:4px 0 0;font-size:13px;color:#64748b;">Configure filters before generating the report.</p>
+        </div>
+      </div>
+      
+      <form id="report-filter-form" onsubmit="Phase7.generateReport(event, '${type}', '${title}')">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:20px;background:#f8fafc;padding:16px;border-radius:6px;border:1px solid #e2e8f0;">
+          <div class="form-group">
+            <label class="form-label">Date From</label>
+            <input type="date" id="rep-date-from" class="form-control">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Date To</label>
+            <input type="date" id="rep-date-to" class="form-control">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Status</label>
+            <input type="text" id="rep-status" class="form-control" placeholder="e.g. Published, In Progress">
+          </div>
+        </div>
+        <div style="text-align:right;">
+          <button type="submit" class="btn btn-primary">Generate Preview</button>
+        </div>
+      </form>
+
+      <div id="report-preview-area" style="margin-top:24px;"></div>
+    `;
+  },
+
+  async generateReport(e, type, title) {
+    e.preventDefault();
+    const area = document.getElementById('report-preview-area');
+    area.innerHTML = '<div style="text-align:center;padding:20px;color:#64748b;">Generating report...</div>';
+
+    const dateFrom = document.getElementById('rep-date-from').value;
+    const dateTo = document.getElementById('rep-date-to').value;
+    const status = document.getElementById('rep-status').value;
+
+    const q = new URLSearchParams();
+    if (dateFrom) q.set('dateFrom', dateFrom);
+    if (dateTo) q.set('dateTo', dateTo);
+    if (status) q.set('status', status);
+
+    try {
+      const r = await this.apiFetch(`/api/reports/${type}?${q}`);
+      const data = await r.json();
+
+     if (!r.ok) { area.innerHTML = `<div style="color:red;padding:20px;">${data.error || 'Error'}</div>`; return; }
+      
+      if (!data.data || data.data.length === 0) {
+        area.innerHTML = '<div style="padding:40px;text-align:center;background:#f8fafc;border:1px dashed #cbd5e1;border-radius:8px;color:#64748b;">No records found for the selected criteria.</div>';
+        return;
+      }
+
+      this.currentReportData = data.data; // Store for export
+      this.currentReportTitle = title;
+
+      // Render Table based on type
+      let headers = [];
+      let rows = '';
+
+      if (type === 'projects') {
+        headers = ['Code', 'Name', 'Status', 'Start Date', 'Tenders', 'Contracts'];
+        rows = data.data.map(p => \`<tr><td>\${p.projectCode}</td><td>\${p.projectName}</td><td>\${p.status}</td><td>\${this.fmtDate(p.startDate)}</td><td>\${p.tenders.length}</td><td>\${p.contracts.length}</td></tr>\`).join('');
+      } else if (type === 'tenders') {
+        headers = ['Tender No', 'Title', 'Project', 'Pub Date', 'Status'];
+        rows = data.data.map(t => \`<tr><td>\${t.tenderNumber}</td><td>\${t.tenderTitle}</td><td>\${t.project?.projectCode||'—'}</td><td>\${this.fmtDate(t.publicationDate)}</td><td>\${t.status}</td></tr>\`).join('');
+      } else if (type === 'tec') {
+        headers = ['Tender No', 'Formation Date', 'Status', 'Members'];
+        rows = data.data.map(t => \`<tr><td>\${t.tender?.tenderNumber||'—'}</td><td>\${this.fmtDate(t.formationDate)}</td><td>\${t.status}</td><td>\${t.members.length}</td></tr>\`).join('');
+      } else if (type === 'contracts') {
+        headers = ['Contract No', 'Vendor', 'Project', 'Award Date', 'Value'];
+        rows = data.data.map(c => \`<tr><td>\${c.contractNumber}</td><td>\${c.vendorName}</td><td>\${c.tender?.project?.projectCode||'—'}</td><td>\${this.fmtDate(c.awardDate)}</td><td>\${c.contractValue}</td></tr>\`).join('');
+      } else if (type === 'documents') {
+        headers = ['Title', 'File', 'Category', 'Project/Context', 'Upload Date'];
+        rows = data.data.map(d => \`<tr><td>\${d.title}</td><td>\${d.fileName}</td><td>\${d.category||'—'}</td><td>\${d.project?.projectCode||'—'}</td><td>\${this.fmtDate(d.createdAt)}</td></tr>\`).join('');
+      } else if (type === 'monitoring') {
+        headers = ['Ref', 'Date', 'Project', 'Location', 'Status', 'Issues'];
+        rows = data.data.map(m => \`<tr><td>\${m.referenceNumber}</td><td>\${this.fmtDate(m.monitoringDate)}</td><td>\${m.project?.projectCode||'—'}</td><td>\${m.location||'—'}</td><td>\${m.status}</td><td>\${m.issues.length}</td></tr>\`).join('');
+      } else if (type === 'issues') {
+        headers = ['Issue No', 'Monitoring Ref', 'Project', 'Target Date', 'Status'];
+        rows = data.data.map(i => \`<tr><td>\${i.issueNumber}</td><td>\${i.monitoring?.referenceNumber||'—'}</td><td>\${i.monitoring?.project?.projectCode||'—'}</td><td>\${this.fmtDate(i.targetDate)}</td><td>\${i.status}</td></tr>\`).join('');
+      }
+
+      area.innerHTML = \`
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+          <h4 style="margin:0;color:#0b2545;">Preview (\${data.total} records)</h4>
+          <div>
+            <button onclick="Phase7.exportCSV('\${type}')" class="btn btn-secondary btn-sm">📥 Export CSV</button>
+            <button onclick="window.print()" class="btn btn-secondary btn-sm">🖨️ Print PDF</button>
+          </div>
+        </div>
+        <div style="overflow-x:auto;">
+          <table class="data-table" style="width:100%;min-width:600px;">
+            <thead><tr>\${headers.map(h => \`<th>\${h}</th>\`).join('')}</tr></thead>
+            <tbody>\${rows}</tbody>
+          </table>
+        </div>
+      \`;
+
+    } catch (e) {
+      area.innerHTML = '<div style="color:red;padding:20px;">Network error generating report.</div>';
+    }
+  },
+
+  exportCSV(type) {
+    if (!this.currentReportData || this.currentReportData.length === 0) return;
+    
+    // Extract headers from keys of first object (excluding complex objects/arrays)
+    const rawHeaders = Object.keys(this.currentReportData[0]).filter(k => typeof this.currentReportData[0][k] !== 'object');
+    
+    let csv = rawHeaders.join(',') + '\\n';
+    
+    this.currentReportData.forEach(row => {
+      const values = rawHeaders.map(h => {
+        let val = row[h];
+        if (val === null || val === undefined) val = '';
+        val = String(val).replace(/"/g, '""');
+        if (val.search(/("|,|\\n)/g) >= 0) val = \`"\${val}"\`;
+        return val;
+      });
+      csv += values.join(',') + '\\n';
+    });
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", \`\${this.currentReportTitle.replace(/\\s+/g, '_')}_\${new Date().getTime()}.csv\`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+};

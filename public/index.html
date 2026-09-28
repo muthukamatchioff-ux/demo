@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PM-SETU Multimedia Projects Multimedia Projects Digital Documentation & Monitoring System | NIMI / MSDE</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏛️</text></svg>">
+</head>
+<body>
+
+  <!-- 1. Government Identity Topbar -->
+  <header class="gov-topbar">
+    <div class="gov-topbar-left">
+      <div class="gov-flag-stripe">
+        <span></span><span></span><span></span>
+      </div>
+      <span>भारत सरकार | Government of India</span>
+      <span style="color:#64748b;">|</span>
+      <span>कौशल विकास एवं उद्यमशीलता मंत्रालय | Ministry of Skill Development & Entrepreneurship</span>
+      <span style="color:#64748b;">|</span>
+      <span>प्रशिक्षण महानिदेशालय (DGT) / NIMI</span>
+    </div>
+    <div class="gov-topbar-right">
+      <span class="gov-demo-badge">DEMO DATA – NOT AN OFFICIAL RECORD</span>
+      <span>Project Year: 2026–27</span>
+      <span style="color:#22c55e;">● SYSTEM ACTIVE</span>
+    </div>
+  </header>
+
+  <!-- 2. Main Portal Header -->
+  <div class="portal-header">
+    <div class="header-brand">
+      <div class="brand-emblem">
+        <span>सत्यमेव जयते</span>
+        <span>NIMI</span>
+      </div>
+      <div class="brand-text">
+        <h1>MULTIMEDIA PROJECTS</h1>
+        <h2>Multimedia Projects Digital Documentation & Monitoring System</h2>
+        <p>National Instructional Media Institute (NIMI) &bull; Directorate General of Training</p>
+      </div>
+    </div>
+
+    <div class="header-controls">
+      <!-- Project Switcher -->
+      <div id="project-switcher-container"></div>
+
+      <!-- Quick Upload Button -->
+      <button class="btn btn-primary btn-sm" onclick="App.openUploadModal()" style="font-weight:700; white-space:nowrap;">
+        <span style="font-size:15px; font-weight:900;">+</span> Upload Document
+      </button>
+
+      <!-- Global Search -->
+      <div class="search-wrapper">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="global-search" class="search-input" placeholder="Search Document ID, Tender, Agency, Keyword...">
+      </div>
+
+      <!-- Role-Based Persona Switcher (Removed for Phase 1 - Handled by Auth) -->
+      <div class="role-switcher-box" style="display:none;">
+      </div>
+
+      <!-- User Profile Badge -->
+      <div class="user-profile-badge">
+        <div class="user-avatar" id="user-avatar">MK</div>
+        <div class="user-meta">
+          <div class="user-meta-name" id="user-name">Mr. Muthukamatchi</div>
+          <div class="user-meta-role" id="user-role">Consultant</div>
+          <a href="#" onclick="fetch('/api/logout', {method:'POST'}).then(()=>window.location.reload())" style="color: #ef4444; font-size: 11px; text-decoration: none; font-weight: bold; margin-top: 4px; display: inline-block;">Logout</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. Application Layout (Sidebar + Main View) -->
+  <div class="app-container">
+    <!-- Left Navigation Sidebar (18 Sections + System Specs) -->
+    <aside class="app-sidebar">
+      <div class="sidebar-section-title">Core Operations</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item">
+          <a href="#" class="nav-link active" data-section="dashboard">
+            <span class="nav-icon">📊</span>
+            <span>1. Dashboard</span>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="#" class="nav-link" data-section="projects">
+            <span class="nav-icon">📂</span>
+            <span>Projects</span>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="#" class="nav-link" data-section="tenders">
+            <span class="nav-icon">📑</span>
+            <span>Tenders</span>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="#" class="nav-link" data-section="tecs">
+            <span class="nav-icon">⚖️</span>
+            <span>TEC</span>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="#" class="nav-link" data-section="contracts">
+            <span class="nav-icon">📜</span>
+            <span>Contracts</span>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="#" class="nav-link" data-section="documents">
+            <span class="nav-icon">📄</span>
+            <span>Documents</span>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="#" class="nav-link" data-section="monitoring">
+            <span class="nav-icon">🔍</span>
+            <span>Monitoring & Video</span>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="#" class="nav-link" data-section="admin-approvals">
+            <span class="nav-icon">📁</span>
+            <span>2. Administrative & Approvals</span>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="#" class="nav-link" data-section="rfp-tenders">
+            <span class="nav-icon">📑</span>
+            <span>3. RFP & Tender Documents</span>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="#" class="nav-link" data-section="bidder-docs">
+            <span class="nav-icon">🏢</span>
+            <span>4. Bidder Documents (Spaces)</span>
+          </a>
+        </li>
+      </ul>
+
+      <div class="sidebar-section-title">Evaluation & Selection</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item">
+          <a href="#" class="nav-link" data-section="tec-evaluation">
+            <span class="nav-icon">⚖️</span>
+            <span>5. Technical Evaluation (TEC)</span>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="#" class="nav-link" data-section="financial-eval">
+            <span class="nav-icon">💰</span>
+            <span>6. Financial Evaluation</span>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="#" class="nav-link" data-section="selection-approval">
+            <span class="nav-icon">🔄</span>
+            <span>7. Selection & Approval</span>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="#" class="nav-link" data-section="work-orders">
+            <span class="nav-icon">📜</span>
+            <span>8. Work Order & Agreement</span>
+          </a>
+        </li>
+      </ul>
+
+      <div class="sidebar-section-title">Campaign & Execution</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item">
+          <a href="#" class="nav-link" data-section="media-planning">
+            <span class="nav-icon">📻</span>
+            <span>9. Media Planning & Buying</span>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="#" class="nav-link" data-section="creative-assets">
+            <span class="nav-icon">🎨</span>
+            <span>10. Creative & Campaign Assets</span>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="#" class="nav-link" data-section="campaign-evidence">
+            <span class="nav-icon">📸</span>
+            <span>11. Campaign Execution Evidence</span>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="#" class="nav-link" data-section="bills-payment">
+            <span class="nav-icon">🧾</span>
+            <span>12. Bills & Payment Module</span>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="#" class="nav-link" data-section="final-report">
+            <span class="nav-icon">📊</span>
+            <span>13. Final Campaign Report</span>
+          </a>
+        </li>
+      </ul>
+
+      <div class="sidebar-section-title">Governance & Records</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item">
+          <a href="#" class="nav-link" data-section="master-register">
+            <span class="nav-icon">🗃️</span>
+            <span>14. Master Document Register</span>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="#" class="nav-link" data-section="reports">
+            <span class="nav-icon">📈</span>
+            <span>15. Reports & Exports</span>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="#" class="nav-link" data-section="user-access">
+            <span class="nav-icon">👥</span>
+            <span>16. User & Access Management</span>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="#" class="nav-link" data-section="audit-trail">
+            <span class="nav-icon">🛡️</span>
+            <span>17. Non-Repudiable Audit Trail</span>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="#" class="nav-link" data-section="archive">
+            <span class="nav-icon">📦</span>
+            <span>18. Archive (PM-SETU 2026–27)</span>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="#" class="nav-link" data-section="system-overview">
+            <span class="nav-icon">⚙️</span>
+            <span>System Architecture Specs</span>
+          </a>
+        </li>
+      </ul>
+    </aside>
+
+    <!-- Main Content Work Area -->
+    <main class="app-main">
+      <div class="breadcrumb-bar">
+        <ul class="breadcrumb-list">
+          <li class="breadcrumb-item"><a href="#" onclick="App.navigate('dashboard')">Multimedia Projects Portal</a></li>
+          <li class="breadcrumb-separator">/</li>
+          <li class="breadcrumb-item" id="breadcrumb-current">Executive Dashboard</li>
+        </ul>
+        <div style="font-size:12px; color:#64748b;">
+          National Instructional Media Institute (NIMI) &bull; Chennai - 600032
+        </div>
+      </div>
+
+      <!-- Dynamic Section View Root -->
+      <div id="main-content"></div>
+    </main>
+  </div>
+
+  <!-- 4. Document Preview & Details Modal -->
+  <div class="modal-overlay" id="preview-modal">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-header">
+        <h3 id="preview-modal-title">Document Inspection</h3>
+        <button class="modal-close-btn">&times;</button>
+      </div>
+      <div class="modal-body" id="preview-modal-body">
+        <!-- Injected via JavaScript -->
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary btn-modal-close">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. Document Upload Modal -->
+  <div class="modal-overlay" id="upload-modal">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3>Register & Upload Official Document</h3>
+        <button class="modal-close-btn">&times;</button>
+      </div>
+      <form onsubmit="App.handleUploadSubmit(event)">
+        <div class="modal-body">
+          <div class="security-alert-box" style="margin-bottom:16px;">
+            <div>ℹ️</div>
+            <div>Strict institutional naming and version conventions are enforced. Uncontrolled filenames like "Final.pdf" are automatically blocked.</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Target Repository Category *</label>
+            <select class="form-control" id="upload-category" required>
+              <option value="01. Administrative & Approvals">01. Administrative & Approvals</option>
+              <option value="02. RFP & Tender Documents">02. RFP & Tender Documents</option>
+              <option value="03. Bidder Documents">03. Bidder Documents</option>
+              <option value="05. Technical Evaluation">05. Technical Evaluation (TEC)</option>
+              <option value="06. Financial Evaluation">06. Financial Evaluation</option>
+              <option value="08. Work Order & Agreement">08. Work Order & Agreement</option>
+              <option value="09. Media Planning & Buying">09. Media Planning & Buying</option>
+              <option value="10. Creative & Campaign Assets">10. Creative & Campaign Assets</option>
+              <option value="11. Campaign Execution Evidence">11. Campaign Execution Evidence</option>
+              <option value="12. Bills & Payment">12. Bills & Payment</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Official Document Title *</label>
+            <input type="text" class="form-control" id="upload-title" placeholder="e.g., Media Plan Revision Phase 2 - Vernacular Print Mix" required>
+          </div>
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+            <div class="form-group">
+              <label class="form-label">Issuing Authority / Agency *</label>
+              <input type="text" class="form-control" id="upload-agency" value="National Instructional Media Institute" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Strict Version Tag *</label>
+              <select class="form-control" id="upload-version" required>
+                <option value="v1.0">v1.0 (Initial Working Draft)</option>
+                <option value="v1.1">v1.1 (Internal Revisions)</option>
+                <option value="v1.2">v1.2 (Review Draft)</option>
+                <option value="v2.0 Approved">v2.0 (Competent Authority Approved)</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Confidentiality & Access Level *</label>
+            <select class="form-control" id="upload-access" required>
+              <option value="Internal">Internal Office Use</option>
+              <option value="Restricted">Restricted / Tender Committee Only</option>
+              <option value="Confidential">Confidential (Rule 173 GFR Restricted)</option>
+              <option value="Public">Public Document / Portal Published</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Select File to Attach (PDF, DOCX, ZIP, MP4)</label>
+            <input type="file" class="form-control">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Official Remarks & Change Description</label>
+            <textarea class="form-control" id="upload-remarks" placeholder="Explain the rationale, competent approval note, or revisions..."></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-modal-close">Cancel</button>
+          <button type="submit" class="btn btn-primary">Submit & Seal in Register</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 5B. Document Edit & Version Upgrade Modal -->
+  <div class="modal-overlay" id="edit-modal">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3>Edit Official Document & Manage Versions</h3>
+        <button class="modal-close-btn">&times;</button>
+      </div>
+      <form onsubmit="App.handleEditSubmit(event)">
+        <input type="hidden" id="edit-doc-id">
+        <div class="modal-body">
+          <div style="background:#f8fafc; border:1px solid var(--border-medium); border-radius:6px; padding:12px 16px; margin-bottom:16px; display:flex; justify-content:space-between; align-items:center;">
+            <div>
+              <div style="font-size:11px; color:#64748b; font-weight:700; text-transform:uppercase;">Document Identifier</div>
+              <code id="edit-doc-id-badge" style="font-size:13px; font-weight:700; color:#0b2545;">PMM-ADM-001</code>
+            </div>
+            <div>
+              <div style="font-size:11px; color:#64748b; font-weight:700; text-transform:uppercase; text-align:right;">Current Version</div>
+              <span id="edit-current-version-badge" class="badge badge-info">v1.0</span>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Official Document Title *</label>
+            <input type="text" class="form-control" id="edit-title" required>
+          </div>
+
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+            <div class="form-group">
+              <label class="form-label">Repository Category *</label>
+              <select class="form-control" id="edit-category" required>
+                <option value="01. Administrative & Approvals">01. Administrative & Approvals</option>
+                <option value="02. RFP & Tender Documents">02. RFP & Tender Documents</option>
+                <option value="03. Bidder Documents">03. Bidder Documents</option>
+                <option value="05. Technical Evaluation">05. Technical Evaluation (TEC)</option>
+                <option value="06. Financial Evaluation">06. Financial Evaluation</option>
+                <option value="08. Work Order & Agreement">08. Work Order & Agreement</option>
+                <option value="09. Media Planning & Buying">09. Media Planning & Buying</option>
+                <option value="10. Creative & Campaign Assets">10. Creative & Campaign Assets</option>
+                <option value="11. Campaign Execution Evidence">11. Campaign Execution Evidence</option>
+                <option value="12. Bills & Payment">12. Bills & Payment</option>
+                <option value="18. Archive">18. Archive</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Document Lifecycle Status *</label>
+              <select class="form-control" id="edit-status" required>
+                <option value="Draft">Draft</option>
+                <option value="Under Review">Under Review</option>
+                <option value="Under Verification">Under Verification</option>
+                <option value="Submitted">Submitted</option>
+                <option value="Approved">Approved</option>
+                <option value="Returned">Returned for Rectification</option>
+                <option value="Archived">Archived</option>
+              </select>
+            </div>
+          </div>
+
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+            <div class="form-group">
+              <label class="form-label">Confidentiality & Access Level *</label>
+              <select class="form-control" id="edit-access" required>
+                <option value="Public">Public Document</option>
+                <option value="Internal">Internal Office Use</option>
+                <option value="Restricted">Restricted / Committee Only</option>
+                <option value="Confidential">Confidential (Rule 173 GFR)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Version Action *</label>
+              <select class="form-control" id="edit-version-action" required>
+                <option value="keep">Keep Current Version</option>
+                <option value="minor">Increment Working Revision (+0.1)</option>
+                <option value="major">Seal as Approved Major Version (+1.0)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Change Description / Revision Notes *</label>
+            <input type="text" class="form-control" id="edit-change-note" placeholder="Explain reasons for edit or approval..." required>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Upload New Revised File (Optional)</label>
+            <input type="file" class="form-control" id="edit-file">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Official Remarks & Notes</label>
+            <textarea class="form-control" id="edit-remarks" placeholder="Official remarks..."></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-modal-close">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Document Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 6. Report Generation & Print Modal -->
+  <div class="modal-overlay" id="report-modal">
+    <div class="modal-dialog modal-xl">
+      <div class="modal-header">
+        <h3>Government Official Report Dossier</h3>
+        <button class="modal-close-btn">&times;</button>
+      </div>
+      <div class="modal-body" id="report-modal-content">
+        <!-- Rendered by ReportEngine -->
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary btn-sm" onclick="ReportEngine.printReport()">
+          🖨️ Print / Save as PDF
+        </button>
+        <button class="btn btn-secondary btn-sm" id="btn-export-csv">
+          📊 Export to Excel (CSV)
+        </button>
+        <button class="btn btn-secondary btn-modal-close btn-sm">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- Scripts -->
+  <script src="js/data.js"></script>
+  <script src="js/reports.js"></script>
+  <script src="js/phase2.js"></script>
+  <script src="js/phase3.js"></script>
+  <script src="js/phase4.js"></script>
+  <script src="js/phase5.js"></script>
+  <script src="js/phase6.js"></script>
+  <script src="js/phase7.js"></script>
+  <script src="js/phase8.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

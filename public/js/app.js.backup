@@ -1,0 +1,2599 @@
+/**
+ * PM-SETU MEDIA MIX DIGITAL DOCUMENTATION & MONITORING SYSTEM
+ * Application Controller & Interactive Logic
+ * National Instructional Media Institute (NIMI)
+ */
+
+const App = {
+  currentUser: null,
+  currentSection: 'dashboard',
+  selectedBidderCategory: 'dissemination',
+  selectedBidderId: 'DIS-01',
+  selectedTenderTab: 'dissemination',
+  selectedMediaFilter: 'all',
+  selectedDocCategoryFilter: 'all',
+  
+  // Initialize Application
+  async init() {
+    try {
+      const res = await fetch('/api/me');
+      if (!res.ok) {
+        window.location.href = '/login.html';
+        return;
+      }
+      const data = await res.json();
+      this.currentUser = {
+        id: data.id,
+        name: data.username,
+        roleName: data.role,
+        designation: data.role,
+        avatar: data.username.substring(0, 2).toUpperCase()
+      };
+      
+      // Bind Event Listeners
+      this.bindEvents();
+      
+      // Render current view
+      this.updateUserProfile();
+      this.navigate('dashboard');
+      this.updateStats();
+      
+      // Log initial session
+      this.logAudit("Portal Session Active", "User Session Initialized", "Logged In", "Active Session");
+    } catch (err) {
+      window.location.href = '/login.html';
+    }
+ }
+  // Event Listeners
+  bindEvents() {
+    // Role switcher dropdown
+    const roleSelect = document.getElementById('role-select');
+    if (roleSelect) {
+      roleSelect.addEventListener('change', (e) => {
+        const selectedId = e.target.value;
+        const user = window.PM_SETU_DATA.users.find(u => u.id === selectedId);
+        if (user) {
+          this.currentUser = user;
+          this.updateUserProfile();
+          this.showToast(`Switched active persona to ${user.name} (${user.roleName})`);
+          this.logAudit("Role Persona Switch", `Switched to ${user.roleName}`, "Previous Role", user.roleName);
+          // Re-render current section with updated permissions
+          this.renderSection(this.currentSection);
+        }
+      });
+    }
+
+    // Navigation links in sidebar
+    document.querySelectorAll('.sidebar-nav .nav-link').forEach(link => {
+      link.addEventListener('click', (e) => {
+        e.preventDefault();
+        const section = link.getAttribute('data-section');
+        if (section) {
+          this.navigate(section);
+        }
+      });
+    });
+
+    // Global Search Input
+    const searchInput = document.getElementById('global-search');
+    if (searchInput) {
+      searchInput.addEventListener('input', (e) => {
+        const query = e.target.value.trim().toLowerCase();
+        this.handleGlobalSearch(query);
+      });
+    }
+
+    // Modal Close buttons
+    document.querySelectorAll('.modal-close-btn, .btn-modal-close').forEach(btn => {
+      btn.addEventListener('click', () => {
+        this.closeAllModals();
+      });
+    });
+
+    // Close modal on background click
+    document.querySelectorAll('.modal-overlay').forEach(overlay => {
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) {
+          this.closeAllModals();
+        }
+      });
+    });
+  },
+
+  // Update Top Profile Header
+  updateUserProfile() {
+    const user = this.currentUser;
+    const nameEl = document.getElementById('user-name');
+    const roleEl = document.getElementById('user-role');
+    const avatarEl = document.getElementById('user-avatar');
+    const roleSelect = document.getElementById('role-select');
+
+    if (nameEl) nameEl.textContent = user.name;
+    if (roleEl) roleEl.textContent = user.designation;
+    if (avatarEl) avatarEl.textContent = user.avatar;
+    if (roleSelect && roleSelect.value !== user.id) {
+      roleSelect.value = user.id;
+    }
+  },
+
+  // Navigation Router
+  navigate(sectionId) {
+    this.currentSection = sectionId;
+    
+    // Update active nav link
+    document.querySelectorAll('.sidebar-nav .nav-link').forEach(link => {
+      if (link.getAttribute('data-section') === sectionId) {
+        link.classList.add('active');
+      } else {
+        link.classList.remove('active');
+      }
+    });
+
+    // Update Breadcrumb
+    const breadcrumbCurrent = document.getElementById('breadcrumb-current');
+    if (breadcrumbCurrent) {
+      breadcrumbCurrent.textContent = this.formatSectionTitle(sectionId);
+    }
+
+    // Render section contents
+    this.renderSection(sectionId);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  },
+
+  formatSectionTitle(sectionId) {
+    const titles = {
+      'dashboard': 'Executive Dashboard',
+      'projects': 'Projects Master',
+      'tenders': 'Tenders Master',
+      'tecs': 'TEC Master',
+      'contracts': 'Contracts Master',
+      'documents': 'Document Repository',
+      'monitoring': 'Monitoring & Video Links',
+      'admin-approvals': '01. Administrative & Approvals',
+      'rfp-tenders': '02. RFP & Tender Documents',
+      'bidder-docs': '03. Bidder Documents & Isolation Boundary',
+      'tec-evaluation': '05. Technical Evaluation Committee (TEC)',
+      'financial-eval': '06. Financial Evaluation & Comparative Statement',
+      'selection-approval': '07. Selection & Approval Workflow',
+      'work-orders': '08. Work Order & Agreement (Executed Contracts)',
+      'media-planning': '09. Media Planning & Buying Schedule',
+      'creative-assets': '10. Creative & Campaign Assets Repository',
+      'campaign-evidence': '11. Campaign Execution Evidence (Proof of Performance)',
+      'bills-payment': '12. Bills & Payment Processing',
+      'final-report': '13. Final Campaign Completion Report',
+      'master-register': '14. Master Document Register (MDR)',
+      'reports': '15. Reports & Analytical Dossiers',
+      'user-access': '16. User & Role-Based Access Control (RBAC)',
+      'audit-trail': '17. Non-Repudiable System Audit Trail',
+      'archive': '18. Final Project Archive (PM-SETU 2026-27)',
+      'system-overview': 'System Architecture & Database Specifications'
+    };
+    return titles[sectionId] || 'Document Repository';
+  },
+
+  // Render Sections
+  renderSection(sectionId) {
+    const mainContainer = document.getElementById('main-content');
+    if (!mainContainer) return;
+
+    switch(sectionId) {
+      case 'dashboard':
+        if (window.Phase6) window.Phase6.renderDashboard(mainContainer);
+        break;
+      case 'projects':
+        if (window.Phase2) window.Phase2.renderProjectsList(mainContainer);
+        break;
+      case 'tenders':
+        if (window.Phase2) window.Phase2.renderTendersList(mainContainer);
+        break;
+      case 'tecs':
+        if (window.Phase3) window.Phase3.renderTecsList(mainContainer);
+        break;
+      case 'contracts':
+        if (window.Phase3) window.Phase3.renderContractsList(mainContainer);
+        break;
+      case 'documents':
+        if (window.Phase4) window.Phase4.renderDocumentsList(mainContainer);
+        break;
+      case 'monitoring':
+        if (window.Phase5) window.Phase5.renderMonitoringList(mainContainer);
+        break;
+      case 'admin-approvals':
+        this.renderAdminApprovals(mainContainer);
+        break;
+      case 'rfp-tenders':
+        this.renderRfpTenders(mainContainer);
+        break;
+      case 'bidder-docs':
+        this.renderBidderDocs(mainContainer);
+        break;
+      case 'tec-evaluation':
+        this.renderTecEvaluation(mainContainer);
+        break;
+      case 'financial-eval':
+        this.renderFinancialEval(mainContainer);
+        break;
+      case 'selection-approval':
+        this.renderSelectionApproval(mainContainer);
+        break;
+      case 'work-orders':
+        this.renderWorkOrders(mainContainer);
+        break;
+      case 'media-planning':
+        this.renderMediaPlanning(mainContainer);
+        break;
+      case 'creative-assets':
+        this.renderCreativeAssets(mainContainer);
+        break;
+      case 'campaign-evidence':
+        this.renderCampaignEvidence(mainContainer);
+        break;
+      case 'bills-payment':
+        this.renderBillsPayment(mainContainer);
+        break;
+      case 'final-report':
+        this.renderFinalReport(mainContainer);
+        break;
+      case 'master-register':
+        this.renderMasterRegister(mainContainer);
+        break;
+      case 'reports':
+        if (window.Phase7) window.Phase7.renderReportsCatalog(mainContainer);
+        break;
+      case 'user-access':
+        this.renderUserAccess(mainContainer);
+        break;
+      case 'audit-trail':
+        if (window.Phase8) window.Phase8.renderAuditViewer(mainContainer);
+        break;
+      case 'archive':
+        this.renderArchive(mainContainer);
+        break;
+      case 'system-overview':
+        this.renderSystemOverview(mainContainer);
+        break;
+      default:
+        this.renderDashboard(mainContainer);
+    }
+  },
+
+  // Compute and Update Dashboard Statistics
+  updateStats() {
+    const docs = window.PM_SETU_DATA.documents;
+    const media = window.PM_SETU_DATA.mediaPlan;
+    const assets = window.PM_SETU_DATA.creativeAssets;
+    const evidence = window.PM_SETU_DATA.evidenceItems;
+    const invoices = window.PM_SETU_DATA.invoices;
+
+    const countAdmin = docs.filter(d => d.category.includes('Administrative')).length;
+    const countTender = docs.filter(d => d.category.includes('RFP & Tender')).length;
+    const countBidder = docs.filter(d => d.category.includes('Bidder Documents')).length;
+    const countTec = docs.filter(d => d.category.includes('Technical Evaluation')).length;
+    const countApproved = docs.filter(d => d.status === 'Approved').length;
+    const countPending = docs.filter(d => d.status === 'Under Review' || d.status === 'Under Verification' || d.status === 'Draft').length;
+    const countArchive = docs.filter(d => d.status === 'Archived').length;
+
+    // Update stat card DOM elements if present
+    const elMap = {
+      'stat-total-docs': docs.length,
+      'stat-admin-docs': countAdmin,
+      'stat-tender-docs': countTender,
+      'stat-bidder-docs': countBidder,
+      'stat-tec-docs': countTec,
+      'stat-approved-docs': countApproved,
+      'stat-media-plans': media.length,
+      'stat-creative-assets': assets.length,
+      'stat-evidence-docs': evidence.length,
+      'stat-bills-docs': invoices.length,
+      'stat-pending-docs': countPending,
+      'stat-archived-docs': countArchive
+    };
+
+    for (const [id, val] of Object.entries(elMap)) {
+      const el = document.getElementById(id);
+      if (el) el.textContent = val;
+    }
+  },
+
+  // 1. DASHBOARD VIEW
+  renderDashboard(container) {
+    const info = window.PM_SETU_DATA.projectInfo;
+    const docs = window.PM_SETU_DATA.documents;
+
+    container.innerHTML = `
+      <!-- Project Information Banner -->
+      <div class="project-banner-card">
+        <div class="banner-grid">
+          <div class="banner-title">
+            <h3>PM-SETU MEDIA MIX DIGITAL DOCUMENTATION & MONITORING SYSTEM</h3>
+            <p>${info.organisation} &bull; ${info.orgSubtitle}</p>
+            <div class="banner-meta-pills">
+              <span class="meta-pill"><strong>Ministry:</strong> ${info.ministry}</span>
+              <span class="meta-pill"><strong>Department:</strong> ${info.department}</span>
+              <span class="meta-pill"><strong>Project Year:</strong> ${info.projectYear}</span>
+              <span class="meta-pill"><strong>System Status:</strong> <span style="color:#4ade80;">● ACTIVE</span></span>
+              <span class="meta-pill"><strong>Last Sync:</strong> ${new Date().toLocaleTimeString('en-IN')} IST</span>
+            </div>
+          </div>
+          <div class="banner-quick-stats">
+            <div class="quick-stat-item">
+              <div class="quick-stat-val">₹ 25.50 Cr</div>
+              <div class="quick-stat-lbl">Sanctioned Outlay</div>
+            </div>
+            <div class="quick-stat-item">
+              <div class="quick-stat-val">1,000+</div>
+              <div class="quick-stat-lbl">Target ITIs & NSTIs</div>
+            </div>
+            <div class="quick-stat-item">
+              <div class="quick-stat-val">22</div>
+              <div class="quick-stat-lbl">Languages Covered</div>
+            </div>
+            <div class="quick-stat-item">
+              <div class="quick-stat-val">100%</div>
+              <div class="quick-stat-lbl">Contracts Executed</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Dashboard Statistics: 12 Clickable Cards -->
+      <div class="page-header" style="margin-bottom: 16px;">
+        <div class="page-header-text">
+          <h2>Key Repository & Monitoring Indicators</h2>
+          <p>Click on any statistic card to drill down into the respective repository module.</p>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn-primary btn-sm" onclick="App.openUploadModal()">
+            <span style="font-size:15px;">+</span> Upload Document
+          </button>
+          <button class="btn btn-secondary btn-sm" onclick="ReportEngine.generateReport('complete-register')">
+            📑 Master Register Report
+          </button>
+        </div>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card" onclick="App.navigate('master-register')">
+          <div class="stat-header">
+            <span class="stat-title">Total Documents</span>
+            <span class="stat-icon">🗂️</span>
+          </div>
+          <div class="stat-number" id="stat-total-docs">${docs.length}</div>
+          <div class="stat-footer">
+            <span>Centralized Digital Vault</span>
+            <span class="stat-link-arrow">View &rarr;</span>
+          </div>
+        </div>
+
+        <div class="stat-card" onclick="App.navigate('admin-approvals')">
+          <div class="stat-header">
+            <span class="stat-title">Administrative Docs</span>
+            <span class="stat-icon">📁</span>
+          </div>
+          <div class="stat-number" id="stat-admin-docs">${docs.filter(d=>d.category.includes('Administrative')).length}</div>
+          <div class="stat-footer">
+            <span>AA&ES, Notes & Minutes</span>
+            <span class="stat-link-arrow">View &rarr;</span>
+          </div>
+        </div>
+
+        <div class="stat-card" onclick="App.navigate('rfp-tenders')">
+          <div class="stat-header">
+            <span class="stat-title">Tender Documents</span>
+            <span class="stat-icon">📑</span>
+          </div>
+          <div class="stat-number" id="stat-tender-docs">${docs.filter(d=>d.category.includes('RFP')).length}</div>
+          <div class="stat-footer">
+            <span>RFPs, Corrigenda, CPPP</span>
+            <span class="stat-link-arrow">View &rarr;</span>
+          </div>
+        </div>
+
+        <div class="stat-card" onclick="App.navigate('bidder-docs')">
+          <div class="stat-header">
+            <span class="stat-title">Bidder Documents</span>
+            <span class="stat-icon">🏢</span>
+          </div>
+          <div class="stat-number" id="stat-bidder-docs">${docs.filter(d=>d.category.includes('Bidder')).length}</div>
+          <div class="stat-footer">
+            <span>Isolated Spaces (6 Bidders)</span>
+            <span class="stat-link-arrow">View &rarr;</span>
+          </div>
+        </div>
+
+        <div class="stat-card card-highlight" onclick="App.navigate('tec-evaluation')">
+          <div class="stat-header">
+            <span class="stat-title">TEC Evaluation Docs</span>
+            <span class="stat-icon">⚖️</span>
+          </div>
+          <div class="stat-number" id="stat-tec-docs">${docs.filter(d=>d.category.includes('Technical Evaluation')).length}</div>
+          <div class="stat-footer">
+            <span>Scores, Sheets & Minutes</span>
+            <span class="stat-link-arrow">View &rarr;</span>
+          </div>
+        </div>
+
+        <div class="stat-card" onclick="App.navigate('master-register')">
+          <div class="stat-header">
+            <span class="stat-title">Approved Documents</span>
+            <span class="stat-icon">✅</span>
+          </div>
+          <div class="stat-number" id="stat-approved-docs">${docs.filter(d=>d.status==='Approved').length}</div>
+          <div class="stat-footer">
+            <span>Legally Sealed Copies</span>
+            <span class="stat-link-arrow">View &rarr;</span>
+          </div>
+        </div>
+
+        <div class="stat-card" onclick="App.navigate('media-planning')">
+          <div class="stat-header">
+            <span class="stat-title">Media Plans</span>
+            <span class="stat-icon">📻</span>
+          </div>
+          <div class="stat-number" id="stat-media-plans">${window.PM_SETU_DATA.mediaPlan.length}</div>
+          <div class="stat-footer">
+            <span>TV, Radio, Print, Digital</span>
+            <span class="stat-link-arrow">View &rarr;</span>
+          </div>
+        </div>
+
+        <div class="stat-card" onclick="App.navigate('creative-assets')">
+          <div class="stat-header">
+            <span class="stat-title">Creative Assets</span>
+            <span class="stat-icon">🎨</span>
+          </div>
+          <div class="stat-number" id="stat-creative-assets">${window.PM_SETU_DATA.creativeAssets.length}</div>
+          <div class="stat-footer">
+            <span>TVCs, Jingles, Banners</span>
+            <span class="stat-link-arrow">View &rarr;</span>
+          </div>
+        </div>
+
+        <div class="stat-card" onclick="App.navigate('campaign-evidence')">
+          <div class="stat-header">
+            <span class="stat-title">Campaign Evidence</span>
+            <span class="stat-icon">📸</span>
+          </div>
+          <div class="stat-number" id="stat-evidence-docs">${window.PM_SETU_DATA.evidenceItems.length}</div>
+          <div class="stat-footer">
+            <span>Proof of Performance (PoP)</span>
+            <span class="stat-link-arrow">View &rarr;</span>
+          </div>
+        </div>
+
+        <div class="stat-card" onclick="App.navigate('bills-payment')">
+          <div class="stat-header">
+            <span class="stat-title">Bills / Payment Docs</span>
+            <span class="stat-icon">🧾</span>
+          </div>
+          <div class="stat-number" id="stat-bills-docs">${window.PM_SETU_DATA.invoices.length}</div>
+          <div class="stat-footer">
+            <span>Invoices & Sanction Orders</span>
+            <span class="stat-link-arrow">View &rarr;</span>
+          </div>
+        </div>
+
+        <div class="stat-card" onclick="App.navigate('master-register')">
+          <div class="stat-header">
+            <span class="stat-title">Pending Review</span>
+            <span class="stat-icon">⏳</span>
+          </div>
+          <div class="stat-number" id="stat-pending-docs" style="color:#d97706;">${docs.filter(d=>d.status.includes('Review')||d.status.includes('Verification')).length}</div>
+          <div class="stat-footer">
+            <span>Awaiting Action</span>
+            <span class="stat-link-arrow">View &rarr;</span>
+          </div>
+        </div>
+
+        <div class="stat-card" onclick="App.navigate('archive')">
+          <div class="stat-header">
+            <span class="stat-title">Final Archived</span>
+            <span class="stat-icon">📦</span>
+          </div>
+          <div class="stat-number" id="stat-archived-docs">${docs.filter(d=>d.status==='Archived').length}</div>
+          <div class="stat-footer">
+            <span>Read-Only Cryptographic Vault</span>
+            <span class="stat-link-arrow">View &rarr;</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Monitoring Section: Tender & Campaign Pipelines -->
+      <div class="monitoring-card">
+        <div class="monitoring-header">
+          <div>
+            <div class="monitoring-title">1. Dissemination Agency Procurement Lifecycle (Tender: 01/2026-27/NIMI)</div>
+            <div style="font-size:12px; color:#64748b;">CPPP Tender ID: 2026_DGT_920631_1 &bull; Budget Cap: ₹ 23.50 Crores &bull; Selected Agency: M/s Action for Rural Development</div>
+          </div>
+          <span class="badge badge-success">Completed & Work Order Issued</span>
+        </div>
+        <div class="stepper-pipeline">
+          <div class="step-item completed">
+            <div class="step-node">✓</div>
+            <div class="step-label">1. RFP Notice</div>
+          </div>
+          <div class="step-item completed">
+            <div class="step-node">✓</div>
+            <div class="step-label">2. Pre-Bid Queries</div>
+          </div>
+          <div class="step-item completed">
+            <div class="step-node">✓</div>
+            <div class="step-label">3. Bid Submission</div>
+          </div>
+          <div class="step-item completed">
+            <div class="step-node">✓</div>
+            <div class="step-label">4. Technical Scrutiny</div>
+          </div>
+          <div class="step-item completed">
+            <div class="step-node">✓</div>
+            <div class="step-label">5. Technical Pitch</div>
+          </div>
+          <div class="step-item completed">
+            <div class="step-node">✓</div>
+            <div class="step-label">6. Financial Vetting</div>
+          </div>
+          <div class="step-item completed">
+            <div class="step-node">✓</div>
+            <div class="step-label">7. TEC Recommendation</div>
+          </div>
+          <div class="step-item completed">
+            <div class="step-node">✓</div>
+            <div class="step-label">8. Ministry Approval</div>
+          </div>
+          <div class="step-item completed">
+            <div class="step-node">✓</div>
+            <div class="step-label">9. Work Order Issued</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="monitoring-card">
+        <div class="monitoring-header">
+          <div>
+            <div class="monitoring-title">2. Creative Agency Procurement Lifecycle (Tender: 02/2026-27/NIMI)</div>
+            <div style="font-size:12px; color:#64748b;">CPPP Tender ID: 2026_DGT_920985_1 &bull; Budget Cap: ₹ 2.00 Crores &bull; Selected Agency: M/s Super Ads Creative Media Pvt. Ltd.</div>
+          </div>
+          <span class="badge badge-success">Completed & Work Order Issued</span>
+        </div>
+        <div class="stepper-pipeline">
+          <div class="step-item completed">
+            <div class="step-node">✓</div>
+            <div class="step-label">1. RFP Notice</div>
+          </div>
+          <div class="step-item completed">
+            <div class="step-node">✓</div>
+            <div class="step-label">2. Pre-Bid Queries</div>
+          </div>
+          <div class="step-item completed">
+            <div class="step-node">✓</div>
+            <div class="step-label">3. Bid Submission</div>
+          </div>
+          <div class="step-item completed">
+            <div class="step-node">✓</div>
+            <div class="step-label">4. Technical Scrutiny</div>
+          </div>
+          <div class="step-item completed">
+            <div class="step-node">✓</div>
+            <div class="step-label">5. Technical Pitch</div>
+          </div>
+          <div class="step-item completed">
+            <div class="step-node">✓</div>
+            <div class="step-label">6. Financial Vetting</div>
+          </div>
+          <div class="step-item completed">
+            <div class="step-node">✓</div>
+            <div class="step-label">7. TEC Recommendation</div>
+          </div>
+          <div class="step-item completed">
+            <div class="step-node">✓</div>
+            <div class="step-label">8. Ministry Approval</div>
+          </div>
+          <div class="step-item completed">
+            <div class="step-node">✓</div>
+            <div class="step-label">9. Work Order Issued</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="monitoring-card">
+        <div class="monitoring-header">
+          <div>
+            <div class="monitoring-title">3. Campaign Execution & Verification Monitoring Pipeline</div>
+            <div style="font-size:12px; color:#64748b;">Real-time tracking of Proof of Performance (PoP), Milestones, Invoicing and Ministry Sanctions</div>
+          </div>
+          <span class="badge badge-info">Active Media Rollout</span>
+        </div>
+        <div class="stepper-pipeline">
+          <div class="step-item completed">
+            <div class="step-node">✓</div>
+            <div class="step-label">1. Media Plan Approved</div>
+          </div>
+          <div class="step-item completed">
+            <div class="step-node">✓</div>
+            <div class="step-label">2. Creative Master Approved</div>
+          </div>
+          <div class="step-item completed">
+            <div class="step-node">✓</div>
+            <div class="step-label">3. Phase 1 Release</div>
+          </div>
+          <div class="step-item active">
+            <div class="step-node">4</div>
+            <div class="step-label">4. Campaign Execution</div>
+          </div>
+          <div class="step-item active">
+            <div class="step-node">5</div>
+            <div class="step-label">5. Evidence Submission</div>
+          </div>
+          <div class="step-item">
+            <div class="step-node">6</div>
+            <div class="step-label">6. PoP Verification</div>
+          </div>
+          <div class="step-item">
+            <div class="step-node">7</div>
+            <div class="step-label">7. Invoice Vetting</div>
+          </div>
+          <div class="step-item">
+            <div class="step-node">8</div>
+            <div class="step-label">8. PFMS Payment</div>
+          </div>
+          <div class="step-item">
+            <div class="step-node">9</div>
+            <div class="step-label">9. Final Report</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Document Access Table -->
+      <div class="table-card">
+        <div class="table-toolbar">
+          <div class="table-title">
+            <h3>Recent Signed & Approved Official Documents</h3>
+            <p>Directly linked to executed PDF and Word agreements in the workspace</p>
+          </div>
+          <button class="btn btn-secondary btn-sm" onclick="App.navigate('master-register')">
+            Open Full Master Document Register &rarr;
+          </button>
+        </div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Document ID</th>
+              <th>Category</th>
+              <th>Document Name</th>
+              <th>Agency / Source</th>
+              <th>Date</th>
+              <th>Version</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${docs.slice(0, 7).map(d => `
+              <tr>
+                <td><code>${d.id}</code></td>
+                <td><small>${d.category}</small></td>
+                <td>
+                  <strong>${d.name}</strong><br>
+                  <small style="color:#64748b;">${d.location}</small>
+                </td>
+                <td>${d.agency}</td>
+                <td>${d.date}</td>
+                <td><span class="badge badge-info">${d.version}</span></td>
+                <td><span class="badge ${d.status === 'Approved' ? 'badge-success' : 'badge-warning'}">${d.status}</span></td>
+                <td>
+                  <button class="btn btn-secondary btn-sm" onclick="App.viewDocument('${d.id}')">
+                    👁️ View Details
+                  </button>
+                  <button class="btn btn-secondary btn-sm" onclick="App.openEditModal('${d.id}')" style="margin-left:4px;">
+                    ✏️ Edit
+                  </button>
+                  ${d.hasRealFile ? `
+                    <a href="${d.realPath}" target="_blank" class="btn btn-primary btn-sm" style="margin-left:4px;">
+                      📄 Open File
+                    </a>
+                  ` : ''}
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  },
+
+  // 2. ADMINISTRATIVE & APPROVALS
+  renderAdminApprovals(container) {
+    const docs = window.PM_SETU_DATA.documents.filter(d => d.category.includes('Administrative'));
+    container.innerHTML = `
+      <div class="page-header">
+        <div class="page-header-text">
+          <h2>01. Administrative & Approvals</h2>
+          <p>File Notes, Administrative Approvals, Committee Constitutions, Official Correspondence, and Meeting Minutes.</p>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn-primary btn-sm" onclick="App.openUploadModal('01. Administrative & Approvals')">
+            + Upload Administrative Doc
+          </button>
+        </div>
+      </div>
+
+      <div class="table-card">
+        <div class="table-toolbar">
+          <div class="table-title">
+            <h3>Administrative Repository & Sanctions</h3>
+            <p>Total Records: ${docs.length}</p>
+          </div>
+        </div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Doc ID</th>
+              <th>Subcategory</th>
+              <th>Document Title</th>
+              <th>Authority / Owner</th>
+              <th>Date</th>
+              <th>Version</th>
+              <th>Access</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${docs.map(d => `
+              <tr>
+                <td><code>${d.id}</code></td>
+                <td><span class="badge badge-outline">${d.subcategory}</span></td>
+                <td>
+                  <strong>${d.name}</strong><br>
+                  <small style="color:#64748b;">${d.remarks}</small>
+                </td>
+                <td>${d.owner}</td>
+                <td>${d.date}</td>
+                <td><span class="badge badge-info">${d.version}</span></td>
+                <td><span class="badge badge-secondary">${d.accessLevel}</span></td>
+                <td>
+                  <button class="btn btn-secondary btn-sm" onclick="App.viewDocument('${d.id}')">View</button>
+                  <button class="btn btn-secondary btn-sm" onclick="App.openEditModal('${d.id}')" style="margin-left:4px;">✏️ Edit</button>
+                  ${d.hasRealFile ? `<a href="${d.realPath}" target="_blank" class="btn btn-primary btn-sm" style="margin-left:4px;">Open File</a>` : ''}
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  },
+
+  // 3. RFP & TENDER DOCUMENTS
+  renderRfpTenders(container) {
+    const tenders = window.PM_SETU_DATA.projectInfo.tenders;
+    const rfpDocs = window.PM_SETU_DATA.documents.filter(d => d.category.includes('RFP'));
+
+    container.innerHTML = `
+      <div class="page-header">
+        <div class="page-header-text">
+          <h2>02. RFP & Tender Documents</h2>
+          <p>Central Public Procurement Portal (CPPP) records, RFPs, Corrigenda, Pre-Bid Notices and Technical Specifications.</p>
+        </div>
+      </div>
+
+      <div class="tabs-header">
+        <button class="tab-btn ${this.selectedTenderTab === 'dissemination' ? 'active' : ''}" onclick="App.switchTenderTab('dissemination')">
+          Dissemination Agency Tender (01/2026-27)
+        </button>
+        <button class="tab-btn ${this.selectedTenderTab === 'creative' ? 'active' : ''}" onclick="App.switchTenderTab('creative')">
+          Creative Agency Tender (02/2026-27)
+        </button>
+      </div>
+
+      <div class="table-card">
+        <div class="table-toolbar">
+          <div class="table-title">
+            <h3>Tender Specification & Public Notices</h3>
+            <p>Published on CPPP Portal under Single-Stage System</p>
+          </div>
+        </div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Doc ID</th>
+              <th>Category</th>
+              <th>Document Title</th>
+              <th>Date</th>
+              <th>Version</th>
+              <th>Access</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rfpDocs.filter(d => {
+              if (this.selectedTenderTab === 'dissemination') return d.subcategory.includes('Dissemination');
+              return d.subcategory.includes('Creative');
+            }).map(d => `
+              <tr>
+                <td><code>${d.id}</code></td>
+                <td><span class="badge badge-outline">${d.subcategory}</span></td>
+                <td>
+                  <strong>${d.name}</strong><br>
+                  <small style="color:#64748b;">${d.remarks}</small>
+                </td>
+                <td>${d.date}</td>
+                <td><span class="badge badge-info">${d.version}</span></td>
+                <td><span class="badge badge-success">${d.accessLevel}</span></td>
+                <td>
+                  <button class="btn btn-secondary btn-sm" onclick="App.viewDocument('${d.id}')">View Details</button>
+                  <button class="btn btn-secondary btn-sm" onclick="App.openEditModal('${d.id}')" style="margin-left:4px;">✏️ Edit</button>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  },
+
+  switchTenderTab(tab) {
+    this.selectedTenderTab = tab;
+    this.renderRfpTenders(document.getElementById('main-content'));
+  },
+
+  // 4. BIDDER DOCUMENTS (STRICT BIDDER ISOLATION BOUNDARY)
+  renderBidderDocs(container) {
+    const bidders = window.PM_SETU_DATA.bidders;
+    const user = this.currentUser;
+
+    // Security check: Check if current user is an Agency User from a competing agency
+    const isRestrictedAgency = user.role.includes('agency') || user.role.includes('bidder');
+    let authorizedAgencyId = user.agencyId || null;
+
+    container.innerHTML = `
+      <div class="page-header">
+        <div class="page-header-text">
+          <h2>03. Bidder Documents Repository</h2>
+          <p>Confidential spaces for participating bidders. Technical Bids, CBC Empanelment, Experience, and Presentations.</p>
+        </div>
+      </div>
+
+      <!-- Security Warning Banner (Section 16 Requirement) -->
+      <div class="security-alert-box">
+        <div style="font-size:20px;">🛡️</div>
+        <div>
+          <strong>Confidential Government Procurement Record – Authorised Access Only.</strong><br>
+          Under Rule 173 of General Financial Rules (GFR) 2017 and CVC Public Procurement Guidelines, one bidder is strictly prohibited from accessing competitor bids, proprietary rates, or internal technical evaluation notes.
+        </div>
+      </div>
+
+      <div style="display:grid; grid-template-columns: 280px 1fr; gap: 20px;">
+        <!-- Left: Bidder Selection List -->
+        <div class="table-card">
+          <div class="table-toolbar">
+            <h4 style="font-size:13px; font-weight:700; color:#0b2545;">Select Bidder Dossier</h4>
+          </div>
+          <div style="padding: 12px;">
+            <div style="font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; margin-bottom:8px;">Dissemination Agency Bidders</div>
+            ${bidders.filter(b => b.category.includes('Dissemination')).map(b => `
+              <div onclick="App.selectBidder('${b.id}')" style="padding:10px 12px; margin-bottom:6px; border-radius:4px; cursor:pointer; border:1px solid ${this.selectedBidderId === b.id ? 'var(--gov-blue)' : 'var(--border-medium)'}; background:${this.selectedBidderId === b.id ? '#eff6ff' : '#ffffff'};">
+                <div style="font-weight:700; font-size:12.5px; color:#0b2545;">${b.name}</div>
+                <div style="font-size:11px; color:#64748b;">Score: ${b.technicalScore || 'Ineligible'} &bull; ${b.status}</div>
+              </div>
+            `).join('')}
+
+            <div style="font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; margin:14px 0 8px 0;">Creative Agency Bidders</div>
+            ${bidders.filter(b => b.category.includes('Creative')).map(b => `
+              <div onclick="App.selectBidder('${b.id}')" style="padding:10px 12px; margin-bottom:6px; border-radius:4px; cursor:pointer; border:1px solid ${this.selectedBidderId === b.id ? 'var(--gov-blue)' : 'var(--border-medium)'}; background:${this.selectedBidderId === b.id ? '#eff6ff' : '#ffffff'};">
+                <div style="font-weight:700; font-size:12.5px; color:#0b2545;">${b.name}</div>
+                <div style="font-size:11px; color:#64748b;">Score: ${b.technicalScore || 'N/A'} &bull; ${b.status}</div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+
+        <!-- Right: Bidder Documents Display or Isolation Block -->
+        <div>
+          ${this.renderBidderDetailArea(isRestrictedAgency, authorizedAgencyId)}
+        </div>
+      </div>
+    `;
+  },
+
+  selectBidder(bidderId) {
+    this.selectedBidderId = bidderId;
+    this.renderBidderDocs(document.getElementById('main-content'));
+  },
+
+  renderBidderDetailArea(isRestrictedAgency, authorizedAgencyId) {
+    const bidder = window.PM_SETU_DATA.bidders.find(b => b.id === this.selectedBidderId);
+    if (!bidder) return `<p>Bidder not found.</p>`;
+
+    // ISOLATION BOUNDARY ENFORCEMENT:
+    // If the logged in user is an agency user and tries to view ANOTHER bidder:
+    if (isRestrictedAgency && authorizedAgencyId !== bidder.id) {
+      return `
+        <div class="table-card" style="padding: 40px 24px; text-align: center; border: 2px dashed #fca5a5; background:#fff1f2;">
+          <div style="font-size: 48px; margin-bottom: 12px;">🚫</div>
+          <h3 style="color: #991b1b; font-size: 18px; font-weight: 800; margin-bottom: 8px;">
+            ACCESS DENIED - BIDDER ISOLATION BOUNDARY ENFORCED
+          </h3>
+          <p style="color: #7f1d1d; max-width: 600px; margin: 0 auto 16px auto; font-size: 13px;">
+            You are logged in as <strong>${this.currentUser.name}</strong> (${this.currentUser.roleName}).
+            Your security privileges restrict you strictly to your own agency's documentation. You do NOT have permission to view confidential bids or proposals submitted by <strong>${bidder.name}</strong>.
+          </p>
+          <div style="font-size: 12px; color: #991b1b; font-family: monospace;">
+            Security Incident Reference: POL-GFR-173-ISOLATION-VIOLATION-BLOCKED
+          </div>
+          <div style="margin-top:20px;">
+            <button class="btn btn-secondary btn-sm" onclick="App.selectBidder('${authorizedAgencyId}')">
+              Switch Back to My Assigned Bidder Space (${authorizedAgencyId})
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    // If authorized, show bidder dossier
+    const bidderDocs = window.PM_SETU_DATA.documents.filter(d => d.bidderId === bidder.id);
+
+    return `
+      <div class="table-card">
+        <div class="table-toolbar">
+          <div>
+            <h3>${bidder.name}</h3>
+            <p>Location: ${bidder.location} &bull; Tender: ${bidder.tenderId} &bull; Status: <span class="badge ${bidder.status.includes('Selected') ? 'badge-success' : 'badge-secondary'}">${bidder.status}</span></p>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="App.openUploadModal('03. Bidder Documents', '${bidder.name}')">
+            + Upload Bidder Submission
+          </button>
+        </div>
+
+        <div style="padding: 16px 20px; background: #f8fafc; border-bottom: 1px solid var(--border-medium); display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; font-size: 12px;">
+          <div><strong>CBC Empanelment:</strong><br>${bidder.cbcEmpaneled}</div>
+          <div><strong>Avg 3-Yr Turnover:</strong><br>${bidder.turnoverAvg}</div>
+          <div><strong>Technical Score:</strong><br><span style="font-weight:700; color:#0b2545;">${bidder.technicalScore ? bidder.technicalScore + ' / 100' : 'Ineligible'}</span></div>
+          <div><strong>Folder Location:</strong><br><code>${bidder.folderPath}</code></div>
+        </div>
+
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Doc ID</th>
+              <th>Document Description</th>
+              <th>Date</th>
+              <th>Version</th>
+              <th>Status</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${bidderDocs.length ? bidderDocs.map(d => `
+              <tr>
+                <td><code>${d.id}</code></td>
+                <td>
+                  <strong>${d.name}</strong><br>
+                  <small style="color:#64748b;">${d.remarks}</small>
+                </td>
+                <td>${d.date}</td>
+                <td><span class="badge badge-info">${d.version}</span></td>
+                <td><span class="badge badge-success">${d.status}</span></td>
+                <td>
+                  <button class="btn btn-secondary btn-sm" onclick="App.viewDocument('${d.id}')">View Dossier</button>
+                  <button class="btn btn-secondary btn-sm" onclick="App.openEditModal('${d.id}')" style="margin-left:4px;">✏️ Edit</button>
+                </td>
+              </tr>
+            `).join('') : `
+              <tr>
+                <td colspan="6" style="text-align:center; padding: 24px; color:#64748b;">
+                  Standard CPPP encrypted bid documents archived in electronic vault.
+                </td>
+              </tr>
+            `}
+          </tbody>
+        </table>
+      </div>
+    `;
+  },
+
+  // 5. TECHNICAL EVALUATION COMMITTEE (TEC) MODULE
+  renderTecEvaluation(container) {
+    const tec = window.PM_SETU_DATA.tecData;
+    const user = this.currentUser;
+    const canScore = user.role === 'admin' || user.role === 'tec_member';
+
+    container.innerHTML = `
+      <div class="page-header">
+        <div class="page-header-text">
+          <h2>05. Technical Evaluation Committee (TEC) Workspace</h2>
+          <p>Eligibility Scrutiny, Technical Evaluation Checklist, Score Sheets, Presentation Schedule and Minutes.</p>
+        </div>
+        <div class="page-actions">
+          ${canScore ? `
+            <button class="btn btn-primary btn-sm" onclick="App.openTecScoringModal()">
+              ✍️ Enter / Update TEC Scores
+            </button>
+          ` : ''}
+          <button class="btn btn-secondary btn-sm" onclick="ReportEngine.generateReport('tec-report')">
+            🖨️ Export TEC Consolidated Report
+          </button>
+        </div>
+      </div>
+
+      <!-- Real files notice -->
+      <div style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:6px; padding:12px 16px; margin-bottom:20px; display:flex; align-items:center; justify-content:space-between;">
+        <div>
+          <strong style="color:#1e40af;">Official Signed Evaluation Records Available in Workspace:</strong>
+          <div style="font-size:12px; color:#1e3a8a;">
+            &bull; Minutes of meeting and Annexure 2 of Dissemination AGencies PM-SETU.pdf<br>
+            &bull; Creative Agncy/3. PM-SETU_Creative_Agency_Individual_Score_Sheets_Including_Average_Presentation_Marks_Unsigned.pdf.pdf
+          </div>
+        </div>
+        <a href="Minutes of meeting and Annexure 2 of Dissemination AGencies PM-SETU.pdf" target="_blank" class="btn btn-primary btn-sm">
+          📄 Open Dissemination TEC Minutes PDF
+        </a>
+      </div>
+
+      <!-- Dissemination TEC Table -->
+      <div class="table-card">
+        <div class="table-toolbar">
+          <div class="table-title">
+            <h3>Dissemination Agency - Consolidated Technical Scores</h3>
+            <p>Tender: 01/2026-27/PM SETU Media Campaign/NIMI &bull; Cutoff: 70/100 Marks</p>
+          </div>
+        </div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Bidder Name</th>
+              <th>Scrutiny Status</th>
+              <th>Presentation Attendance</th>
+              <th>MSDE Score</th>
+              <th>DGT Score</th>
+              <th>NIMI Score</th>
+              <th>CBC Score</th>
+              <th>Average Score</th>
+              <th>Ranking</th>
+              <th>Recommendation</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${tec.tender1.biddersEvaluation.map(b => `
+              <tr style="${b.rank.includes('H-1') ? 'background:#f0fdf4;' : ''}">
+                <td><strong>${b.bidderName}</strong></td>
+                <td><span class="badge badge-success">${b.scrutinyStatus}</span></td>
+                <td><small>${b.presentationAttendance}</small></td>
+                <td>${b.evaluatorScores[0].score}</td>
+                <td>${b.evaluatorScores[1].score}</td>
+                <td>${b.evaluatorScores[2].score}</td>
+                <td>${b.evaluatorScores[3].score}</td>
+                <td><strong style="color:#0b2545; font-size:14px;">${b.averageScore}</strong></td>
+                <td><span class="badge ${b.rank.includes('H-1') ? 'badge-success' : 'badge-secondary'}">${b.rank}</span></td>
+                <td><small>${b.recommendation}</small></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Creative Agency TEC Table -->
+      <div class="table-card">
+        <div class="table-toolbar">
+          <div class="table-title">
+            <h3>Creative Agency - Consolidated Technical Scores</h3>
+            <p>Tender: 02/2026-27/PM SETU Media Campaign/NIMI &bull; Cutoff: 70/100 Marks</p>
+          </div>
+        </div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Bidder Name</th>
+              <th>Scrutiny Status</th>
+              <th>Presentation Attendance</th>
+              <th>Director MSDE</th>
+              <th>Director DGT</th>
+              <th>Executive Director NIMI</th>
+              <th>Average Score</th>
+              <th>Ranking</th>
+              <th>Recommendation</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${tec.tender2.biddersEvaluation.map(b => `
+              <tr style="${b.rank.includes('H-1') ? 'background:#f0fdf4;' : ''}">
+                <td><strong>${b.bidderName}</strong></td>
+                <td><span class="badge badge-success">${b.scrutinyStatus}</span></td>
+                <td><small>${b.presentationAttendance}</small></td>
+                <td>${b.evaluatorScores[0].score}</td>
+                <td>${b.evaluatorScores[1].score}</td>
+                <td>${b.evaluatorScores[2].score}</td>
+                <td><strong style="color:#0b2545; font-size:14px;">${b.averageScore}</strong></td>
+                <td><span class="badge ${b.rank.includes('H-1') ? 'badge-success' : 'badge-secondary'}">${b.rank}</span></td>
+                <td><small>${b.recommendation}</small></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  },
+
+  // 6. FINANCIAL EVALUATION MODULE
+  renderFinancialEval(container) {
+    const user = this.currentUser;
+    // Security check: Only Admin, Senior Officer, or Project Team can see financial comparison
+    const hasFinancialAccess = ['admin', 'senior_officer', 'project_team'].includes(user.role);
+
+    if (!hasFinancialAccess) {
+      container.innerHTML = `
+        <div class="page-header">
+          <div class="page-header-text">
+            <h2>06. Financial Evaluation Module</h2>
+            <p>Confidential Financial Comparison & Vetting</p>
+          </div>
+        </div>
+        <div class="table-card" style="padding: 40px 24px; text-align: center; border: 2px dashed #fca5a5; background:#fff1f2;">
+          <div style="font-size: 48px; margin-bottom: 12px;">🔒</div>
+          <h3 style="color: #991b1b; font-size: 18px; font-weight: 800; margin-bottom: 8px;">
+            RESTRICTED ACCESS - CONFIDENTIAL FINANCIAL BID INFORMATION
+          </h3>
+          <p style="color: #7f1d1d; max-width: 600px; margin: 0 auto; font-size: 13px;">
+            Your active role <strong>${user.roleName}</strong> does not possess clearance to inspect commercial price schedules or comparative financial statements. Access is strictly limited to authorized Finance and Tender Evaluation Authorities.
+          </p>
+        </div>
+      `;
+      return;
+    }
+
+    container.innerHTML = `
+      <div class="page-header">
+        <div class="page-header-text">
+          <h2>06. Financial Evaluation Module</h2>
+          <p>Comparative Statement, Financial Bids, Applicable GST (18%), and Budget Cap Verification.</p>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn-secondary btn-sm" onclick="ReportEngine.generateReport('payment-report')">
+            📑 Financial Vetting Report
+          </button>
+        </div>
+      </div>
+
+      <div class="table-card">
+        <div class="table-toolbar">
+          <div class="table-title">
+            <h3>Dissemination Agency - Financial Comparative Statement</h3>
+            <p>Approved Outlay Cap: ₹ 23,50,00,000/- (Inclusive of 18% GST)</p>
+          </div>
+          <span class="badge badge-success">Vetted & Conformed</span>
+        </div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Bidder Name</th>
+              <th>Technical Score (St)</th>
+              <th>Base Financial Proposal</th>
+              <th>GST @ 18%</th>
+              <th>Total Evaluated Price</th>
+              <th>Conformity to Cap</th>
+              <th>Outcome</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>M/s Action for Rural Development</strong></td>
+              <td>88.5 / 100 (H-1)</td>
+              <td>₹ 19,91,52,542/-</td>
+              <td>₹ 3,58,47,458/-</td>
+              <td><strong>₹ 23,50,00,000/-</strong></td>
+              <td><span class="badge badge-success">100% Within Cap</span></td>
+              <td><span class="badge badge-success">Selected Agency (H-1)</span></td>
+            </tr>
+            <tr>
+              <td><strong>M/s Bharat Communications Ltd</strong></td>
+              <td>76.2 / 100 (H-2)</td>
+              <td>₹ 19,91,52,542/-</td>
+              <td>₹ 3,58,47,458/-</td>
+              <td>₹ 23,50,00,000/-</td>
+              <td><span class="badge badge-success">Within Cap</span></td>
+              <td><span class="badge badge-secondary">Non-Selected</span></td>
+            </tr>
+            <tr>
+              <td><strong>M/s Prasar Outreach Consortium</strong></td>
+              <td>71.0 / 100 (H-3)</td>
+              <td>₹ 19,91,52,542/-</td>
+              <td>₹ 3,58,47,458/-</td>
+              <td>₹ 23,50,00,000/-</td>
+              <td><span class="badge badge-success">Within Cap</span></td>
+              <td><span class="badge badge-secondary">Non-Selected</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="table-card">
+        <div class="table-toolbar">
+          <div class="table-title">
+            <h3>Creative Agency - Financial Comparative Statement</h3>
+            <p>Approved Outlay Cap: ₹ 2,00,00,000/- (Inclusive of 18% GST)</p>
+          </div>
+          <span class="badge badge-success">Vetted & Conformed</span>
+        </div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Bidder Name</th>
+              <th>Technical Score (St)</th>
+              <th>Base Deliverables Outlay</th>
+              <th>GST @ 18%</th>
+              <th>Total Evaluated Price</th>
+              <th>Conformity to Cap</th>
+              <th>Outcome</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>M/s Super Ads Creative Media Pvt. Ltd.</strong></td>
+              <td>91.2 / 100 (H-1)</td>
+              <td>₹ 1,69,49,153/-</td>
+              <td>₹ 30,50,847/-</td>
+              <td><strong>₹ 2,00,00,000/-</strong></td>
+              <td><span class="badge badge-success">100% Within Cap</span></td>
+              <td><span class="badge badge-success">Selected Agency (H-1)</span></td>
+            </tr>
+            <tr>
+              <td><strong>M/s Drishti Creative Studio LLP</strong></td>
+              <td>83.4 / 100 (H-2)</td>
+              <td>₹ 1,69,49,153/-</td>
+              <td>₹ 30,50,847/-</td>
+              <td>₹ 2,00,00,000/-</td>
+              <td><span class="badge badge-success">Within Cap</span></td>
+              <td><span class="badge badge-secondary">Non-Selected</span></td>
+            </tr>
+            <tr>
+              <td><strong>M/s Varta Multimedia & Brand Lab</strong></td>
+              <td>77.8 / 100 (H-3)</td>
+              <td>₹ 1,69,49,153/-</td>
+              <td>₹ 30,50,847/-</td>
+              <td>₹ 2,00,00,000/-</td>
+              <td><span class="badge badge-success">Within Cap</span></td>
+              <td><span class="badge badge-secondary">Non-Selected</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    `;
+  },
+
+  // 7. SELECTION & APPROVAL WORKFLOW
+  renderSelectionApproval(container) {
+    const pipeline = window.PM_SETU_DATA.selectionWorkflow;
+    const canApprove = ['admin', 'senior_officer'].includes(this.currentUser.role);
+
+    container.innerHTML = `
+      <div class="page-header">
+        <div class="page-header-text">
+          <h2>07. Selection & Approval Workflow Tracking</h2>
+          <p>Linear multi-stage verification from Technical Evaluation to Work Order Execution.</p>
+        </div>
+        <div class="page-actions">
+          ${canApprove ? `
+            <button class="btn btn-primary btn-sm" onclick="App.openWorkflowApprovalModal()">
+              ✍️ Record Approval Action
+            </button>
+          ` : ''}
+        </div>
+      </div>
+
+      <div class="table-card">
+        <div class="table-toolbar">
+          <div class="table-title">
+            <h3>Sequential Procurement Milestone Matrix</h3>
+            <p>Every transition is authenticated with electronic file references and digital audit entries.</p>
+          </div>
+        </div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Stage</th>
+              <th>Workflow Milestone</th>
+              <th>Date</th>
+              <th>Responsible Officer</th>
+              <th>Approval Reference</th>
+              <th>Status</th>
+              <th>Remarks</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${pipeline.map(s => `
+              <tr>
+                <td><strong>Stage ${s.stage}</strong></td>
+                <td>
+                  <strong>${s.title}</strong><br>
+                  <small style="color:#64748b;">${s.document}</small>
+                </td>
+                <td>${s.date}</td>
+                <td>${s.officer}</td>
+                <td><code>${s.reference}</code></td>
+                <td><span class="badge badge-success">${s.status}</span></td>
+                <td><small>${s.remarks}</small></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  },
+
+  // 8. WORK ORDER & AGREEMENT
+  renderWorkOrders(container) {
+    container.innerHTML = `
+      <div class="page-header">
+        <div class="page-header-text">
+          <h2>08. Work Order & Executed Agreements</h2>
+          <p>Binding legal contracts, performance security, SLA clauses, liquidated damages, and intellectual property deeds.</p>
+        </div>
+      </div>
+
+      <!-- Real files notice -->
+      <div style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:6px; padding:16px 20px; margin-bottom:20px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+        <div>
+          <strong style="color:#166534; font-size:14px;">Official Work Orders Executed on 24.09.2026:</strong>
+          <div style="font-size:12.5px; color:#14532d; margin-top:4px;">
+            1. Dissemination Agency Work Order No. <code>NIMI/MS/T-02/2026-27/PM-SETU-DA</code> (₹23.50 Cr)<br>
+            2. Creative Agency Work Order No. <code>NIMI/MS/T-02/2026-27/PM-SETU-CA</code> (₹2.00 Cr)
+          </div>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <a href="Final Draft V2 Work order/Dissemination Agency/Dissemination Agency Work Order final draft V2.pdf" target="_blank" class="btn btn-primary btn-sm">
+            📄 Open Dissemination WO (PDF)
+          </a>
+          <a href="Final Draft V2 Work order/Creative Agency/Creative Agency Work Order Final draft V2.pdf" target="_blank" class="btn btn-primary btn-sm">
+            📄 Open Creative WO (PDF)
+          </a>
+        </div>
+      </div>
+
+      <div class="table-card">
+        <div class="table-toolbar">
+          <div class="table-title">
+            <h3>Contractual Clauses & Compliance Inventory</h3>
+            <p>Standard Government Contract Provisions under GFR 2017</p>
+          </div>
+        </div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Clause #</th>
+              <th>Contractual Domain</th>
+              <th>Mandatory Provision</th>
+              <th>Compliance Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>1.0</td>
+              <td><strong>Scope & Objectives</strong></td>
+              <td>Advocacy across 1,000 ITIs and 5 NSTIs nationwide</td>
+              <td><span class="badge badge-success">Executed</span></td>
+            </tr>
+            <tr>
+              <td>2.0</td>
+              <td><strong>Performance Security (PBG)</strong></td>
+              <td>5% of contract value deposited via Bank Guarantee</td>
+              <td><span class="badge badge-success">Verified</span></td>
+            </tr>
+            <tr>
+              <td>3.0</td>
+              <td><strong>Intellectual Property Rights</strong></td>
+              <td>Unconditional deed of assignment of all raw footage, masters & stems to NIMI/MSDE</td>
+              <td><span class="badge badge-success">Enforced</span></td>
+            </tr>
+            <tr>
+              <td>4.0</td>
+              <td><strong>Penalty Matrix & SLAs</strong></td>
+              <td>Deductions for delayed proof of performance or non-compliance</td>
+              <td><span class="badge badge-success">Active</span></td>
+            </tr>
+            <tr>
+              <td>5.0</td>
+              <td><strong>Confidentiality & Non-Disclosure</strong></td>
+              <td>Strict embargo on campaign creatives prior to official national launch</td>
+              <td><span class="badge badge-success">Active</span></td>
+            </tr>
+            <tr>
+              <td>6.0</td>
+              <td><strong>GST & Statutory Deductions</strong></td>
+              <td>TDS under Section 194C & GST-TDS at 2% statutory rate</td>
+              <td><span class="badge badge-success">Compliant</span></td>
+            </tr>
+            <tr>
+              <td>7.0</td>
+              <td><strong>Arbitration & Dispute Resolution</strong></td>
+              <td>Exclusive jurisdiction in Chennai; Arbitrator appointed by Executive Director, NIMI</td>
+              <td><span class="badge badge-success">Standard Clause</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    `;
+  },
+
+  // 9. MEDIA PLANNING & BUYING
+  renderMediaPlanning(container) {
+    const items = window.PM_SETU_DATA.mediaPlan;
+    const filtered = this.selectedMediaFilter === 'all' ? items : items.filter(i => i.media.toLowerCase().includes(this.selectedMediaFilter));
+
+    container.innerHTML = `
+      <div class="page-header">
+        <div class="page-header-text">
+          <h2>09. Media Planning & Buying Schedule</h2>
+          <p>Approved Media Mix, Platforms, Regions, Rates, and Proof of Performance Tracking.</p>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn-secondary btn-sm" onclick="ReportEngine.generateReport('media-plan-report')">
+            🖨️ Export Master Media Plan (PDF / CSV)
+          </button>
+        </div>
+      </div>
+
+      <div class="table-card">
+        <div class="table-toolbar">
+          <div class="table-title">
+            <h3>Channel-Wise Media Plan Inventory</h3>
+            <p>Total Scheduled Value: ₹ 23.50 Crores</p>
+          </div>
+          <div class="table-filters">
+            <label class="form-label" style="margin:0; font-size:12px;">Filter Channel:</label>
+            <select class="filter-select" onchange="App.filterMedia(this.value)">
+              <option value="all" ${this.selectedMediaFilter==='all'?'selected':''}>All Media Channels</option>
+              <option value="tv" ${this.selectedMediaFilter==='tv'?'selected':''}>TV Broadcast</option>
+              <option value="radio" ${this.selectedMediaFilter==='radio'?'selected':''}>Radio</option>
+              <option value="print" ${this.selectedMediaFilter==='print'?'selected':''}>Print Daily</option>
+              <option value="digital" ${this.selectedMediaFilter==='digital'?'selected':''}>Digital & Social</option>
+              <option value="outdoor" ${this.selectedMediaFilter==='outdoor'?'selected':''}>Outdoor / OOH</option>
+              <option value="ott" ${this.selectedMediaFilter==='ott'?'selected':''}>OTT & Cinema</option>
+            </select>
+          </div>
+        </div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Media</th>
+              <th>Platform / Publication</th>
+              <th>Market / Region</th>
+              <th>Specs / Duration</th>
+              <th>Volume</th>
+              <th>Base Rate</th>
+              <th>GST (18%)</th>
+              <th>Total Outlay</th>
+              <th>Status</th>
+              <th>Proof Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${filtered.map(m => `
+              <tr>
+                <td><strong>${m.media}</strong></td>
+                <td>${m.platform}</td>
+                <td><small>${m.marketRegion}</small></td>
+                <td>${m.durationSize}</td>
+                <td>${m.quantity}</td>
+                <td>₹ ${(m.rate/100000).toFixed(2)} L</td>
+                <td>₹ ${(m.gst/100000).toFixed(2)} L</td>
+                <td><strong style="color:#0b2545;">₹ ${(m.total/100000).toFixed(2)} L</strong></td>
+                <td><span class="badge badge-success">${m.status}</span></td>
+                <td><span class="badge badge-info">${m.proofStatus}</span></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  },
+
+  filterMedia(filter) {
+    this.selectedMediaFilter = filter;
+    this.renderMediaPlanning(document.getElementById('main-content'));
+  },
+
+  // 10. CREATIVE & CAMPAIGN ASSETS
+  renderCreativeAssets(container) {
+    const assets = window.PM_SETU_DATA.creativeAssets;
+    container.innerHTML = `
+      <div class="page-header">
+        <div class="page-header-text">
+          <h2>10. Creative & Campaign Assets Repository</h2>
+          <p>Brand Guidelines, Master Video TVCs, Radio Jingles, Print Creatives, and 22-Language Adaptations.</p>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn-primary btn-sm" onclick="App.openUploadModal('10. Creative & Campaign Assets')">
+            + Upload Creative Asset
+          </button>
+        </div>
+      </div>
+
+      <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px;">
+        ${assets.map(a => `
+          <div class="table-card" style="margin-bottom:0;">
+            <div style="height: 120px; background: linear-gradient(135deg, #0b2545, #1e3a8a); color:#fff; display:flex; align-items:center; justify-content:center; flex-direction:column; padding:16px; text-align:center;">
+              <div style="font-size:28px;">${a.previewType === 'video' ? '🎬' : a.previewType === 'audio' ? '🎵' : '🖼️'}</div>
+              <div style="font-weight:700; font-size:13px; margin-top:4px;">${a.mediaType}</div>
+              <div style="font-size:11px; color:#cbd5e1;">${a.language}</div>
+            </div>
+            <div style="padding:16px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                <code>${a.id}</code>
+                <span class="badge badge-success">${a.version}</span>
+              </div>
+              <h4 style="font-size:14px; font-weight:700; color:#0b2545; margin-bottom:6px;">${a.title}</h4>
+              <p style="font-size:12px; color:#64748b; margin-bottom:12px; line-height:1.4;">${a.remarks}</p>
+              <div style="font-size:11.5px; color:#475569; border-top:1px solid var(--border-light); padding-top:10px; display:flex; justify-content:space-between;">
+                <span>Size: ${a.fileSize}</span>
+                <span>Format: ${a.format}</span>
+              </div>
+              <div style="margin-top:12px; display:flex; gap:8px;">
+                <button class="btn btn-secondary btn-sm" style="flex:1;" onclick="App.previewAsset('${a.id}')">
+                  👁️ Preview Asset
+                </button>
+                <button class="btn btn-primary btn-sm" style="flex:1;" onclick="App.showToast('Asset package downloaded: ${a.id}')">
+                  ⬇️ Download
+                </button>
+              </div>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  },
+
+  previewAsset(assetId) {
+    const asset = window.PM_SETU_DATA.creativeAssets.find(a => a.id === assetId);
+    if (!asset) return;
+
+    const modalBody = document.getElementById('preview-modal-body');
+    const modalTitle = document.getElementById('preview-modal-title');
+    modalTitle.textContent = `${asset.title} (${asset.id})`;
+
+    modalBody.innerHTML = `
+      <div style="text-align:center; padding: 20px; background:#0f172a; border-radius:6px; color:#fff; margin-bottom:16px;">
+        <div style="font-size:48px; margin-bottom:12px;">${asset.previewType==='video'?'🎬':asset.previewType==='audio'?'🎵':'🖼️'}</div>
+        <h4>${asset.title}</h4>
+        <div style="font-size:12px; color:#94a3b8; margin-top:4px;">Language: ${asset.language} &bull; Format: ${asset.format} &bull; Size: ${asset.fileSize}</div>
+        <div style="margin-top:16px;">
+          <span class="badge badge-success">${asset.approvalStatus}</span>
+        </div>
+      </div>
+      <div style="font-size:13px; line-height:1.5;">
+        <p><strong>Campaign Phase:</strong> ${asset.campaign}</p>
+        <p><strong>Uploaded By:</strong> ${asset.uploadedBy} on ${asset.date}</p>
+        <p><strong>Technical Notes:</strong> ${asset.remarks}</p>
+        <p><strong>IPR Assignment:</strong> Executed Deed of Assignment transferred to National Instructional Media Institute / Ministry of Skill Development.</p>
+      </div>
+    `;
+
+    document.getElementById('preview-modal').classList.add('active');
+    this.logAudit("Asset Previewed", `Previewed asset ${asset.id}`, "Stored", "Viewed");
+  },
+
+  // 11. CAMPAIGN EXECUTION EVIDENCE (PROOF OF PERFORMANCE)
+  renderCampaignEvidence(container) {
+    const evidence = window.PM_SETU_DATA.evidenceItems;
+    const canVerify = ['admin', 'project_team'].includes(this.currentUser.role);
+
+    container.innerHTML = `
+      <div class="page-header">
+        <div class="page-header-text">
+          <h2>11. Campaign Execution Evidence (Proof of Performance)</h2>
+          <p>Tear Sheets, Telecast Certificates, Radio Logs, Geo-Tagged Billboards, and Digital Analytics Reports.</p>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn-secondary btn-sm" onclick="ReportEngine.generateReport('evidence-report')">
+            🖨️ Export Evidence Verification Audit
+          </button>
+        </div>
+      </div>
+
+      <div class="table-card">
+        <div class="table-toolbar">
+          <div class="table-title">
+            <h3>Submitted Proof of Performance Dossiers</h3>
+            <p>Verification is mandatory prior to invoice release</p>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="App.openUploadModal('11. Campaign Execution Evidence')">
+            + Upload Evidence Dossier
+          </button>
+        </div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Evidence ID</th>
+              <th>Media</th>
+              <th>Evidence Title</th>
+              <th>Date & Location</th>
+              <th>Submitted By</th>
+              <th>Status</th>
+              <th>Verified By</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${evidence.map(e => `
+              <tr>
+                <td><code>${e.id}</code></td>
+                <td><strong>${e.media}</strong></td>
+                <td>
+                  <strong>${e.title}</strong><br>
+                  <small style="color:#64748b;">${e.remarks}</small>
+                </td>
+                <td>${e.date}<br><small>${e.location}</small></td>
+                <td>${e.agency}</td>
+                <td><span class="badge ${e.verificationStatus === 'Verified' ? 'badge-success' : 'badge-warning'}">${e.verificationStatus}</span></td>
+                <td>${e.verifiedBy}</td>
+                <td>
+                  ${canVerify && e.verificationStatus !== 'Verified' ? `
+                    <button class="btn btn-success btn-sm" onclick="App.verifyEvidence('${e.id}')">
+                      ✓ Verify
+                    </button>
+                  ` : `
+                    <button class="btn btn-secondary btn-sm" onclick="App.showToast('Inspected evidence file: ${e.file}')">
+                      👁️ Inspect
+                    </button>
+                  `}
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  },
+
+  verifyEvidence(id) {
+    const item = window.PM_SETU_DATA.evidenceItems.find(e => e.id === id);
+    if (item) {
+      item.verificationStatus = 'Verified';
+      item.verifiedBy = `${this.currentUser.name} (${this.currentUser.designation})`;
+      item.verificationDate = new Date().toLocaleString('en-IN') + ' IST';
+      this.showToast(`Evidence ${id} has been officially verified!`);
+      this.logAudit("Evidence Verified", `Verified PoP for ${id}`, "Submitted", "Verified");
+      this.renderCampaignEvidence(document.getElementById('main-content'));
+    }
+  },
+
+  // 12. BILLS & PAYMENT MODULE
+  renderBillsPayment(container) {
+    const invoices = window.PM_SETU_DATA.invoices;
+    const canApprove = ['admin', 'senior_officer'].includes(this.currentUser.role);
+
+    container.innerHTML = `
+      <div class="page-header">
+        <div class="page-header-text">
+          <h2>12. Bills & Payment Processing</h2>
+          <p>Invoice Register, GST Compliance, Sanction Orders, PFMS Disbursements, and UTR Tracking.</p>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn-secondary btn-sm" onclick="ReportEngine.generateReport('payment-report')">
+            🖨️ Payment Status Report
+          </button>
+        </div>
+      </div>
+
+      <div class="table-card">
+        <div class="table-toolbar">
+          <div class="table-title">
+            <h3>Commercial Invoices & Milestone Disbursements</h3>
+            <p>Linked to verified Proof of Performance & Bank Guarantees</p>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="App.openUploadModal('12. Bills & Payment')">
+            + Submit Agency Invoice
+          </button>
+        </div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Invoice No.</th>
+              <th>Agency</th>
+              <th>Billing Milestone</th>
+              <th>Base (₹)</th>
+              <th>GST 18% (₹)</th>
+              <th>Gross Total (₹)</th>
+              <th>Sanction Order</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${invoices.map(i => `
+              <tr>
+                <td><strong>${i.invoiceNo}</strong><br><small>Dated: ${i.submittedDate}</small></td>
+                <td>${i.agency}</td>
+                <td>${i.period}</td>
+                <td>₹ ${i.amountExclTax.toLocaleString('en-IN')}</td>
+                <td>₹ ${i.gstAmount.toLocaleString('en-IN')}</td>
+                <td><strong style="color:#0b2545;">₹ ${i.totalAmount.toLocaleString('en-IN')}</strong></td>
+                <td><code>${i.sanctionRef}</code></td>
+                <td><span class="badge ${i.paymentStatus.includes('Paid') ? 'badge-success' : 'badge-info'}">${i.paymentStatus}</span></td>
+                <td>
+                  ${canApprove && i.paymentStatus !== 'Paid' ? `
+                    <button class="btn btn-success btn-sm" onclick="App.markInvoicePaid('${i.invoiceNo}')">
+                      Approve & Pay
+                    </button>
+                  ` : `
+                    <button class="btn btn-secondary btn-sm" onclick="App.showToast('Viewing invoice ${i.invoiceNo}')">
+                      👁️ Details
+                    </button>
+                  `}
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  },
+
+  markInvoicePaid(invoiceNo) {
+    const inv = window.PM_SETU_DATA.invoices.find(i => i.invoiceNo === invoiceNo);
+    if (inv) {
+      inv.paymentStatus = 'Paid (PFMS Disbursed)';
+      inv.utrRef = `PFMS-TXN-2026-${Math.floor(100000 + Math.random() * 900000)}`;
+      this.showToast(`Invoice ${invoiceNo} marked as Paid. UTR: ${inv.utrRef}`);
+      this.logAudit("Payment Disbursed", `Disbursed payment for ${invoiceNo}`, "Approved", "Paid");
+      this.renderBillsPayment(document.getElementById('main-content'));
+    }
+  },
+
+  // 13. FINAL CAMPAIGN REPORT
+  renderFinalReport(container) {
+    container.innerHTML = `
+      <div class="page-header">
+        <div class="page-header-text">
+          <h2>13. Final Campaign Completion Report</h2>
+          <p>National Reach Metrics, ITI Footfall, SLA Adherence, and Executive Project Sign-Off.</p>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn-primary btn-sm" onclick="ReportEngine.generateReport('complete-register')">
+            🖨️ Print Final Campaign Dossier
+          </button>
+        </div>
+      </div>
+
+      <div class="table-card" style="padding: 24px;">
+        <div style="text-align:center; max-width:800px; margin: 0 auto 30px auto;">
+          <h3 style="color:#0b2545; font-size:18px; margin-bottom:8px;">
+            PM-SETU ADVOCACY CAMPAIGN 2026-27: EXECUTIVE PERFORMANCE SUMMARY
+          </h3>
+          <p style="color:#64748b; font-size:13px;">
+            A flagship national initiative to modernise 1,000 ITIs and 5 NSTIs into aspirational, government-owned, industry-managed technical training hubs.
+          </p>
+        </div>
+
+        <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px;">
+          <div style="background:#f8fafc; border:1px solid var(--border-medium); border-radius:6px; padding:16px; text-align:center;">
+            <div style="font-size:24px; font-weight:800; color:#0b2545;">185+ Million</div>
+            <div style="font-size:12px; color:#64748b; text-transform:uppercase;">Gross Multi-Media Reach</div>
+          </div>
+          <div style="background:#f8fafc; border:1px solid var(--border-medium); border-radius:6px; padding:16px; text-align:center;">
+            <div style="font-size:24px; font-weight:800; color:#15803d;">1,000 ITIs</div>
+            <div style="font-size:12px; color:#64748b; text-transform:uppercase;">Ground Activation Covered</div>
+          </div>
+          <div style="background:#f8fafc; border:1px solid var(--border-medium); border-radius:6px; padding:16px; text-align:center;">
+            <div style="font-size:24px; font-weight:800; color:#c25e00;">22 Languages</div>
+            <div style="font-size:12px; color:#64748b; text-transform:uppercase;">Multilingual Content</div>
+          </div>
+          <div style="background:#f8fafc; border:1px solid var(--border-medium); border-radius:6px; padding:16px; text-align:center;">
+            <div style="font-size:24px; font-weight:800; color:#1d4ed8;">98.4%</div>
+            <div style="font-size:12px; color:#64748b; text-transform:uppercase;">SLA Adherence Score</div>
+          </div>
+        </div>
+      </div>
+    `;
+  },
+
+  // 14. MASTER DOCUMENT REGISTER (MDR)
+  renderMasterRegister(container) {
+    const docs = window.PM_SETU_DATA.documents;
+    const filtered = this.selectedDocCategoryFilter === 'all' ? docs : docs.filter(d => d.category.includes(this.selectedDocCategoryFilter));
+
+    container.innerHTML = `
+      <div class="page-header">
+        <div class="page-header-text">
+          <h2>14. Master Document Register (MDR)</h2>
+          <p>Universal inventory of all official digital records, standard document identifiers, and version stamps.</p>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn-primary btn-sm" onclick="App.openUploadModal()">
+            + Register New Document
+          </button>
+          <button class="btn btn-secondary btn-sm" onclick="ReportEngine.generateReport('complete-register')">
+            🖨️ Export MDR (PDF / Excel)
+          </button>
+        </div>
+      </div>
+
+      <div class="table-card">
+        <div class="table-toolbar">
+          <div class="table-title">
+            <h3>Central Master Repository</h3>
+            <p>Showing ${filtered.length} of ${docs.length} tracked records</p>
+          </div>
+          <div class="table-filters">
+            <select class="filter-select" onchange="App.filterMdrCategory(this.value)">
+              <option value="all">All Document Categories</option>
+              <option value="Administrative">01. Administrative & Approvals</option>
+              <option value="RFP">02. RFP & Tender Documents</option>
+              <option value="Bidder">03. Bidder Documents</option>
+              <option value="Technical Evaluation">05. Technical Evaluation (TEC)</option>
+              <option value="Financial">06. Financial Evaluation</option>
+              <option value="Work Order">08. Work Order & Agreement</option>
+              <option value="Media Planning">09. Media Planning & Buying</option>
+              <option value="Creative">10. Creative & Campaign Assets</option>
+              <option value="Evidence">11. Campaign Execution Evidence</option>
+              <option value="Bills">12. Bills & Payment</option>
+              <option value="Archive">18. Archive</option>
+            </select>
+          </div>
+        </div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Document ID</th>
+              <th>Category</th>
+              <th>Document Name</th>
+              <th>Agency / Source</th>
+              <th>Date</th>
+              <th>Version</th>
+              <th>Status</th>
+              <th>Access Level</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${filtered.map(d => `
+              <tr>
+                <td><code>${d.id}</code></td>
+                <td><small>${d.subcategory || d.category}</small></td>
+                <td>
+                  <strong>${d.name}</strong><br>
+                  <small style="color:#64748b;">${d.location}</small>
+                </td>
+                <td>${d.agency}</td>
+                <td>${d.date}</td>
+                <td><span class="badge badge-info">${d.version}</span></td>
+                <td><span class="badge ${d.status === 'Approved' ? 'badge-success' : 'badge-warning'}">${d.status}</span></td>
+                <td><span class="badge badge-outline">${d.accessLevel}</span></td>
+                <td>
+                  <button class="btn btn-secondary btn-sm" onclick="App.viewDocument('${d.id}')">View</button>
+                  <button class="btn btn-secondary btn-sm" onclick="App.openEditModal('${d.id}')" style="margin-left:4px;">✏️ Edit</button>
+                  ${d.hasRealFile ? `<a href="${d.realPath}" target="_blank" class="btn btn-primary btn-sm" style="margin-left:4px;">Open File</a>` : ''}
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  },
+
+  filterMdrCategory(cat) {
+    this.selectedDocCategoryFilter = cat;
+    this.renderMasterRegister(document.getElementById('main-content'));
+  },
+
+  // 15. REPORTS SECTION
+  renderReportsSection(container) {
+    const reportOptions = [
+      { key: "complete-register", title: "Complete Document Register", desc: "Full inventory of all official documents with unique IDs and versions." },
+      { key: "tender-status", title: "Tender Procurement Status Report", desc: "Status of Dissemination and Creative agency tenders under CPPP." },
+      { key: "bidder-status", title: "Bidder Participation & Scrutiny", desc: "CBC empanelment check, eligibility scrutiny and bidder list." },
+      { key: "tec-report", title: "TEC Technical Evaluation Report", desc: "Individual and average scores given by all committee members." },
+      { key: "media-plan-report", title: "Approved Media Plan Outlay", desc: "Channel-wise media outlays across TV, Radio, Print, Digital, and OOH." },
+      { key: "evidence-report", title: "Proof of Performance (PoP) Audit", desc: "Verification logs of published tear sheets and broadcast logs." },
+      { key: "payment-report", title: "Invoices & Payment Sanctions", desc: "Milestone bill clearances, GST verification and PFMS UTR tracking." },
+      { key: "audit-report", title: "System Audit Trail Report", desc: "Tamper-evident chronological log of all portal activities." }
+    ];
+
+    container.innerHTML = `
+      <div class="page-header">
+        <div class="page-header-text">
+          <h2>15. Official Reports & Analytical Dossiers</h2>
+          <p>Generate compliant Government of India formatted PDF reports and export structured Excel / CSV datasets.</p>
+        </div>
+      </div>
+
+      <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px;">
+        ${reportOptions.map(r => `
+          <div class="table-card" style="margin-bottom:0; display:flex; flex-direction:column; justify-content:space-between; padding:20px;">
+            <div>
+              <div style="font-size:24px; margin-bottom:8px;">📑</div>
+              <h3 style="font-size:15px; font-weight:700; color:#0b2545; margin-bottom:6px;">${r.title}</h3>
+              <p style="font-size:12.5px; color:#64748b; line-height:1.4;">${r.desc}</p>
+            </div>
+            <div style="margin-top:16px; display:flex; gap:8px;">
+              <button class="btn btn-primary btn-sm" style="flex:1;" onclick="ReportEngine.generateReport('${r.key}')">
+                👁️ Generate View
+              </button>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  },
+
+  // 16. USER & ACCESS MANAGEMENT (RBAC)
+  renderUserAccess(container) {
+    const users = window.PM_SETU_DATA.users;
+    container.innerHTML = `
+      <div class="page-header">
+        <div class="page-header-text">
+          <h2>16. User & Role-Based Access Control (RBAC)</h2>
+          <p>Access privileges, designations, organizational units, and permission matrices.</p>
+        </div>
+      </div>
+
+      <div class="table-card">
+        <div class="table-toolbar">
+          <div class="table-title">
+            <h3>Registered Institutional Users & Personas</h3>
+            <p>Test role boundaries using the persona dropdown in the top header.</p>
+          </div>
+        </div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>User ID</th>
+              <th>Officer Name</th>
+              <th>Designation & Org</th>
+              <th>System Role</th>
+              <th>Privileges</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${users.map(u => `
+              <tr style="${this.currentUser.id === u.id ? 'background:#eff6ff;' : ''}">
+                <td><code>${u.id}</code></td>
+                <td><strong>${u.name}</strong><br><small style="color:#64748b;">${u.email}</small></td>
+                <td>${u.designation}<br><small>${u.department}</small></td>
+                <td><span class="badge ${u.role === 'admin' ? 'badge-danger' : 'badge-info'}">${u.roleName}</span></td>
+                <td><small>${u.permissions.join(', ')}</small></td>
+                <td>
+                  <button class="btn btn-secondary btn-sm" onclick="App.simulateLoginAs('${u.id}')">
+                    Switch To This Persona
+                  </button>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  },
+
+  simulateLoginAs(userId) {
+    const user = window.PM_SETU_DATA.users.find(u => u.id === userId);
+    if (user) {
+      this.currentUser = user;
+      this.updateUserProfile();
+      this.showToast(`Switched active persona to ${user.name}`);
+      this.renderUserAccess(document.getElementById('main-content'));
+    }
+  },
+
+  // 17. AUDIT TRAIL
+  renderAuditTrail(container) {
+    const logs = window.PM_SETU_DATA.auditLogs;
+    container.innerHTML = `
+      <div class="page-header">
+        <div class="page-header-text">
+          <h2>17. Non-Repudiable System Audit Trail</h2>
+          <p>Chronological, immutable transaction log tracking all logins, document modifications, score submissions, and approvals.</p>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn-secondary btn-sm" onclick="ReportEngine.generateReport('audit-report')">
+            🖨️ Export Audit Report
+          </button>
+        </div>
+      </div>
+
+      <div class="table-card">
+        <div class="table-toolbar">
+          <div class="table-title">
+            <h3>Digital Event Log</h3>
+            <p>Every event is stamped with source IP and SHA-256 cryptographic hash.</p>
+          </div>
+        </div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Log ID</th>
+              <th>Timestamp (IST)</th>
+              <th>Officer / User</th>
+              <th>Role</th>
+              <th>Action</th>
+              <th>Target Entity</th>
+              <th>State Transition</th>
+              <th>Integrity Hash</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${logs.map(l => `
+              <tr>
+                <td><code>${l.id}</code></td>
+                <td>${l.timestamp}</td>
+                <td><strong>${l.user}</strong></td>
+                <td><span class="badge badge-outline">${l.role}</span></td>
+                <td><strong>${l.action}</strong></td>
+                <td><small>${l.entity}</small></td>
+                <td><small>${l.previousStatus} &rarr; <strong>${l.newStatus}</strong></small></td>
+                <td><code style="font-size:11px;">${l.hash}</code></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  },
+
+  // 18. ARCHIVE
+  renderArchive(container) {
+    const archivedDocs = window.PM_SETU_DATA.documents.filter(d => d.status === 'Archived');
+    container.innerHTML = `
+      <div class="page-header">
+        <div class="page-header-text">
+          <h2>18. Final Project Archive (PM-SETU 2026-27)</h2>
+          <p>Cryptographically sealed, read-only institutional dossier for permanent government record retention.</p>
+        </div>
+      </div>
+
+      <div class="table-card" style="padding: 24px; background:#fafbfc; border-left: 6px solid #0b2545;">
+        <h3 style="color:#0b2545; font-size:16px; margin-bottom:8px;">
+          PM-SETU MEDIA MIX – FINAL ARCHIVE 2026–27 (SEALED VAULT)
+        </h3>
+        <p style="font-size:13px; color:#475569; margin-bottom:16px;">
+          All records in this repository are governed by the Public Records Act 1993 and National Archives of India standards.
+          Once deposited into the Final Archive, records are permanently locked against any editing or deletion.
+        </p>
+        <div style="font-size:12px; color:#64748b; font-family:monospace; background:#ffffff; padding:10px; border-radius:4px; border:1px solid var(--border-medium);">
+          Archive Vault ID: NAI-MSDE-2026-SETU-ARC-01<br>
+          Integrity Master Hash: E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855 (Verified)
+        </div>
+      </div>
+    `;
+  },
+
+  // 19. SYSTEM OVERVIEW & ARCHITECTURE PAGE
+  renderSystemOverview(container) {
+    const schema = window.PM_SETU_DATA.dbSchema;
+    container.innerHTML = `
+      <div class="page-header">
+        <div class="page-header-text">
+          <h2>System Architecture, Database Schema & Operational Workflow</h2>
+          <p>Comprehensive technical specifications, entity models, and regulatory compliance standards.</p>
+        </div>
+      </div>
+
+      <div class="table-card" style="padding: 24px; margin-bottom:24px;">
+        <h3 style="color:#0b2545; font-size:16px; margin-bottom:12px;">Architecture Topology & System Boundaries</h3>
+        <div style="background:#f8fafc; border:1px solid var(--border-medium); border-radius:6px; padding:16px; font-family:monospace; font-size:12px; line-height:1.6; color:#0b2545;">
+          +---------------------------------------------------------------------------------------------------+<br>
+          |                       PM-SETU MEDIA MIX DIGITAL DOCUMENTATION & MONITORING SYSTEM                  |<br>
+          +---------------------------------------------------------------------------------------------------+<br>
+          |  [PRESENTATION LAYER]                                                                             |<br>
+          |  - Government of India / NIMI Portal Dashboard (HTML5, Responsive CSS3, Modular ES6 JS)          |<br>
+          |  - Strict Role-Based Access Control (Admin, Senior Officer, TEC, Project Team, Agency)            |<br>
+          |  - Document Preview Modal, Dynamic Search Engine, Printable Government Reports, CSV Exporter      |<br>
+          +---------------------------------------------------------------------------------------------------+<br>
+          |  [BUSINESS & GOVERNANCE LOGIC]                                                                    |<br>
+          |  - Bidder Isolation Firewall (Blocks cross-bidder document disclosure per GFR 2017 Rule 173)      |<br>
+          |  - Version Control Engine (Forbids uncontrolled "Final.pdf"; enforces v1.0, v1.1, v2.0 Approved)  |<br>
+          |  - Technical Evaluation Committee (TEC) Scoring & Recommendation Pipeline                         |<br>
+          |  - Proof of Performance (PoP) Verification Engine & PFMS Payment Release Checkpoint               |<br>
+          +---------------------------------------------------------------------------------------------------+<br>
+          |  [DATA & AUDIT REPOSITORY]                                                                        |<br>
+          |  - Relational Entity Store (Tenders, Bidders, Documents, Versions, Evaluations, Invoices, Audits)  |<br>
+          |  - Non-Repudiable Append-Only Audit Trail with Cryptographic Hashing                               |<br>
+          |  - Master Document Register (Standardized PMM-IDs: PMM-ADM, PMM-RFP, PMM-WO, PMM-PAY, etc.)        |<br>
+          +---------------------------------------------------------------------------------------------------+
+        </div>
+      </div>
+
+      <div class="table-card">
+        <div class="table-toolbar">
+          <div class="table-title">
+            <h3>Relational Database Entity Specifications</h3>
+            <p>Structured schema designed for enterprise RDBMS deployment (PostgreSQL / Microsoft SQL Server)</p>
+          </div>
+        </div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Entity / Table Name</th>
+              <th>Description</th>
+              <th>Core Attributes & Keys</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${schema.map(s => `
+              <tr>
+                <td><strong><code>${s.entity}</code></strong></td>
+                <td>${s.description}</td>
+                <td><small>${s.attributes.join(', ')}</small></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  },
+
+  // Document Detail Modal View
+  viewDocument(docId) {
+    const doc = window.PM_SETU_DATA.documents.find(d => d.id === docId);
+    if (!doc) return;
+
+    const modalBody = document.getElementById('preview-modal-body');
+    const modalTitle = document.getElementById('preview-modal-title');
+    modalTitle.textContent = `${doc.name} (${doc.id})`;
+
+    modalBody.innerHTML = `
+      <div style="background:#f8fafc; border:1px solid var(--border-medium); border-radius:6px; padding:16px; margin-bottom:16px;">
+        <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+          <div><strong>Document ID:</strong> <code>${doc.id}</code></div>
+          <div><strong>Version:</strong> <span class="badge badge-info">${doc.version}</span> (${doc.versionLabel || 'Working'})</div>
+        </div>
+        <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+          <div><strong>Category:</strong> ${doc.category}</div>
+          <div><strong>Subcategory:</strong> ${doc.subcategory || 'N/A'}</div>
+        </div>
+        <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+          <div><strong>Author / Source:</strong> ${doc.agency}</div>
+          <div><strong>Owner:</strong> ${doc.owner}</div>
+        </div>
+        <div style="display:flex; justify-content:space-between;">
+          <div><strong>Date:</strong> ${doc.date}</div>
+          <div><strong>Status:</strong> <span class="badge ${doc.status === 'Approved' ? 'badge-success' : 'badge-warning'}">${doc.status}</span></div>
+        </div>
+      </div>
+
+      <div style="margin-bottom:16px;">
+        <h4 style="font-size:13px; font-weight:700; color:#0b2545; margin-bottom:4px;">Official Remarks & Summary</h4>
+        <p style="font-size:12.5px; color:#475569; line-height:1.5;">${doc.remarks || 'Official institutional record.'}</p>
+      </div>
+
+      <div style="margin-bottom:16px;">
+        <h4 style="font-size:13px; font-weight:700; color:#0b2545; margin-bottom:6px;">Version Lineage & Change Description</h4>
+        <div style="background:#ffffff; border:1px solid var(--border-light); border-radius:4px; padding:10px; font-size:12px;">
+          ${doc.history ? doc.history.map(h => `
+            <div style="padding:4px 0; border-bottom:1px dashed #e2e8f0;">
+              <strong>${h.version}</strong> (${h.date}) by <em>${h.user}</em> &bull; ${h.note}
+            </div>
+          `).join('') : 'Initial sealed version.'}
+        </div>
+      </div>
+
+      ${doc.hasRealFile ? `
+        <div style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:6px; padding:14px; display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
+          <div>
+            <strong style="color:#1e40af;">Actual File in Local Workspace:</strong>
+            <div style="font-size:12px; color:#1e3a8a;">${doc.realPath}</div>
+          </div>
+          <a href="${doc.realPath}" target="_blank" class="btn btn-primary btn-sm">
+            📄 Open Local Document
+          </a>
+        </div>
+      ` : ''}
+
+      <div style="text-align:right; border-top:1px solid var(--border-medium); padding-top:14px;">
+        <button class="btn btn-primary btn-sm" onclick="App.openEditModal('${doc.id}')">
+          ✏️ Edit Document Metadata & Manage Versions
+        </button>
+      </div>
+    `;
+
+    document.getElementById('preview-modal').classList.add('active');
+    this.logAudit("Document Viewed", `Inspected document metadata ${doc.id}`, "Stored", "Inspected");
+  },
+
+  // Open Document Upload Modal
+  openUploadModal(defaultCategory = '', defaultAgency = '') {
+    // Check permission
+    if (this.currentUser.role === 'bidder_competitor') {
+      alert("Permission Denied: Your account role does not possess upload privileges.");
+      return;
+    }
+
+    const catSelect = document.getElementById('upload-category');
+    if (catSelect && defaultCategory) {
+      catSelect.value = defaultCategory;
+    }
+    const agencyInput = document.getElementById('upload-agency');
+    if (agencyInput && defaultAgency) {
+      agencyInput.value = defaultAgency;
+    }
+
+    document.getElementById('upload-modal').classList.add('active');
+  },
+
+  // Handle Document Upload Submit
+  handleUploadSubmit(e) {
+    e.preventDefault();
+    const title = document.getElementById('upload-title').value.trim();
+    const category = document.getElementById('upload-category').value;
+    const version = document.getElementById('upload-version').value;
+    const remarks = document.getElementById('upload-remarks').value.trim();
+    const access = document.getElementById('upload-access').value;
+
+    if (!title) {
+      alert("Please specify the document title.");
+      return;
+    }
+
+    // Generate unique ID based on category
+    let prefix = "PMM-DOC-";
+    if (category.includes("Administrative")) prefix = "PMM-ADM-";
+    else if (category.includes("RFP")) prefix = "PMM-RFP-";
+    else if (category.includes("Bidder")) prefix = "PMM-BID-";
+    else if (category.includes("Technical")) prefix = "PMM-TEC-";
+    else if (category.includes("Financial")) prefix = "PMM-FIN-";
+    else if (category.includes("Work Order")) prefix = "PMM-WO-";
+    else if (category.includes("Media")) prefix = "PMM-MED-";
+    else if (category.includes("Creative")) prefix = "PMM-CRE-";
+    else if (category.includes("Evidence")) prefix = "PMM-EVD-";
+    else if (category.includes("Bills")) prefix = "PMM-PAY-";
+
+    const newId = `${prefix}${String(window.PM_SETU_DATA.documents.length + 1).padStart(3, '0')}`;
+    const newDoc = {
+      id: newId,
+      category: category,
+      subcategory: category.split('.')[1]?.trim() || category,
+      name: title,
+      agency: this.currentUser.department || "NIMI / MSDE",
+      date: new Date().toISOString().split('T')[0],
+      version: version,
+      versionLabel: version.includes('2') ? "Approved Version" : "Working Draft",
+      owner: this.currentUser.name,
+      status: "Under Review",
+      accessLevel: access,
+      location: `${category}/${title.replace(/[^a-zA-Z0-9]/g, '_')}_${version}.pdf`,
+      size: "1.2 MB",
+      remarks: remarks || "Uploaded via Portal Interface.",
+      history: [
+        { version: version, date: new Date().toISOString().split('T')[0], user: this.currentUser.name, note: "Initial upload." }
+      ]
+    };
+
+    window.PM_SETU_DATA.documents.unshift(newDoc);
+    this.closeAllModals();
+    this.showToast(`Document ${newId} registered successfully!`);
+    this.logAudit("Document Uploaded", `Registered document ${newId} (${title})`, "Draft", "Under Review");
+    this.updateStats();
+    this.renderSection(this.currentSection);
+  },
+
+  // Open Document Edit & Version Upgrade Modal
+  openEditModal(docId) {
+    const user = this.currentUser;
+    const doc = window.PM_SETU_DATA.documents.find(d => d.id === docId);
+    if (!doc) {
+      alert("Document not found in repository.");
+      return;
+    }
+
+    // Role-based permission check
+    if (user.role === 'bidder_competitor') {
+      alert("Permission Denied: Your account role does not possess document editing privileges.");
+      return;
+    }
+
+    if (user.role.includes('agency') && doc.bidderId !== user.agencyId) {
+      alert("Access Denied: You may only modify deliverables submitted by your assigned agency.");
+      return;
+    }
+
+    // Populate modal fields
+    document.getElementById('edit-doc-id').value = doc.id;
+    document.getElementById('edit-doc-id-badge').textContent = doc.id;
+    document.getElementById('edit-current-version-badge').textContent = `${doc.version} (${doc.status})`;
+    document.getElementById('edit-title').value = doc.name;
+    document.getElementById('edit-category').value = doc.category;
+    document.getElementById('edit-status').value = doc.status;
+    document.getElementById('edit-access').value = doc.accessLevel;
+    document.getElementById('edit-change-note').value = "";
+    document.getElementById('edit-remarks').value = doc.remarks || "";
+    document.getElementById('edit-version-action').value = "keep";
+
+    document.getElementById('edit-modal').classList.add('active');
+  },
+
+  // Handle Document Edit Submit
+  handleEditSubmit(e) {
+    e.preventDefault();
+    const docId = document.getElementById('edit-doc-id').value;
+    const doc = window.PM_SETU_DATA.documents.find(d => d.id === docId);
+    if (!doc) return;
+
+    const newTitle = document.getElementById('edit-title').value.trim();
+    const newCategory = document.getElementById('edit-category').value;
+    const newStatus = document.getElementById('edit-status').value;
+    const newAccess = document.getElementById('edit-access').value;
+    const versionAction = document.getElementById('edit-version-action').value;
+    const changeNote = document.getElementById('edit-change-note').value.trim();
+    const newRemarks = document.getElementById('edit-remarks').value.trim();
+    const fileInput = document.getElementById('edit-file');
+
+    if (!changeNote) {
+      alert("Please provide a Change Description / Revision Note explaining this modification.");
+      return;
+    }
+
+    const previousStatus = doc.status;
+    const previousVersion = doc.version;
+    let newVersion = previousVersion;
+
+    // Handle Version Increment per Section 14
+    if (versionAction === 'minor') {
+      const match = doc.version.match(/v(\d+)\.(\d+)/);
+      if (match) {
+        const major = parseInt(match[1]);
+        const minor = parseInt(match[2]) + 1;
+        newVersion = `v${major}.${minor}`;
+      } else {
+        newVersion = "v1.1";
+      }
+      doc.versionLabel = "Working Draft";
+    } else if (versionAction === 'major') {
+      const match = doc.version.match(/v(\d+)/);
+      const major = match ? parseInt(match[1]) + 1 : 2;
+      newVersion = `v${major}.0`;
+      doc.versionLabel = "Approved Version";
+    }
+
+    // Apply updates
+    doc.name = newTitle;
+    doc.category = newCategory;
+    doc.subcategory = newCategory.split('.')[1]?.trim() || newCategory;
+    doc.status = newStatus;
+    doc.accessLevel = newAccess;
+    doc.version = newVersion;
+    doc.remarks = newRemarks;
+
+    // Update location if file attached
+    if (fileInput && fileInput.files && fileInput.files.length > 0) {
+      doc.location = `${newCategory}/${fileInput.files[0].name}`;
+      doc.size = `${(fileInput.files[0].size / 1024 / 1024).toFixed(2)} MB`;
+    }
+
+    // Append to version history lineage
+    if (!doc.history) doc.history = [];
+    doc.history.unshift({
+      version: newVersion,
+      date: new Date().toISOString().split('T')[0],
+      user: this.currentUser.name,
+      note: changeNote
+    });
+
+    this.closeAllModals();
+    this.showToast(`Document ${doc.id} successfully updated to ${newVersion} (${newStatus})`);
+    this.logAudit("Document Edited", `Updated ${doc.id} (${changeNote})`, `${previousStatus} [${previousVersion}]`, `${newStatus} [${newVersion}]`);
+    this.updateStats();
+    this.renderSection(this.currentSection);
+  },
+
+  // Interactive TEC Scoring Modal
+  openTecScoringModal() {
+    const modalBody = document.getElementById('preview-modal-body');
+    const modalTitle = document.getElementById('preview-modal-title');
+    modalTitle.textContent = "Technical Evaluation Committee (TEC) - Score Entry";
+
+    modalBody.innerHTML = `
+      <form id="tec-scoring-form" onsubmit="App.handleTecScoringSubmit(event)">
+        <div class="form-group">
+          <label class="form-label">Select Tender</label>
+          <select class="form-control" id="score-tender-select" onchange="App.populateScoreBidders(this.value)">
+            <option value="tender1">Dissemination Agency (01/2026-27/PM SETU Media Campaign/NIMI)</option>
+            <option value="tender2">Creative Agency (02/2026-27/PM SETU Media Campaign/NIMI)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Select Bidder</label>
+          <select class="form-control" id="score-bidder-select">
+            <option value="M/s Action for Rural Development">M/s Action for Rural Development</option>
+            <option value="M/s Bharat Communications Ltd">M/s Bharat Communications Ltd</option>
+            <option value="M/s Prasar Outreach Consortium">M/s Prasar Outreach Consortium</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Evaluator Identity</label>
+          <input type="text" class="form-control" value="${this.currentUser.name} (${this.currentUser.designation})" readonly>
+        </div>
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+          <div class="form-group">
+            <label class="form-label">Technical Proposal Marks (Max: 70)</label>
+            <input type="number" class="form-control" id="score-tech" min="0" max="70" step="0.5" value="62.5" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Presentation Marks (Max: 30)</label>
+            <input type="number" class="form-control" id="score-pres" min="0" max="30" step="0.5" value="26.0" required>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Evaluator Observations / Justification</label>
+          <textarea class="form-control" id="score-remarks" placeholder="Provide detailed technical rationale...">Strong regional capabilities and CBC compliance.</textarea>
+        </div>
+        <div style="text-align:right; margin-top:16px;">
+          <button type="submit" class="btn btn-primary">Submit Official TEC Score</button>
+        </div>
+      </form>
+    `;
+
+    document.getElementById('preview-modal').classList.add('active');
+  },
+
+  populateScoreBidders(tenderKey) {
+    const select = document.getElementById('score-bidder-select');
+    if (!select) return;
+    if (tenderKey === 'tender1') {
+      select.innerHTML = `
+        <option value="M/s Action for Rural Development">M/s Action for Rural Development</option>
+        <option value="M/s Bharat Communications Ltd">M/s Bharat Communications Ltd</option>
+        <option value="M/s Prasar Outreach Consortium">M/s Prasar Outreach Consortium</option>
+      `;
+    } else {
+      select.innerHTML = `
+        <option value="M/s Super Ads Creative Media Pvt. Ltd.">M/s Super Ads Creative Media Pvt. Ltd.</option>
+        <option value="M/s Drishti Creative Studio LLP">M/s Drishti Creative Studio LLP</option>
+        <option value="M/s Varta Multimedia & Brand Lab">M/s Varta Multimedia & Brand Lab</option>
+      `;
+    }
+  },
+
+  handleTecScoringSubmit(e) {
+    e.preventDefault();
+    const bidder = document.getElementById('score-bidder-select').value;
+    const tech = parseFloat(document.getElementById('score-tech').value) || 0;
+    const pres = parseFloat(document.getElementById('score-pres').value) || 0;
+    const total = tech + pres;
+
+    this.closeAllModals();
+    this.showToast(`TEC Score for ${bidder} recorded: ${total} / 100 Marks`);
+    this.logAudit("TEC Score Entry", `Recorded score ${total}/100 for ${bidder}`, "Under Evaluation", "Score Tabulated");
+    if (this.currentSection === 'tec-evaluation') {
+      this.renderTecEvaluation(document.getElementById('main-content'));
+    }
+  },
+
+  // Interactive Workflow Approval Modal
+  openWorkflowApprovalModal() {
+    const modalBody = document.getElementById('preview-modal-body');
+    const modalTitle = document.getElementById('preview-modal-title');
+    modalTitle.textContent = "Record Workflow Stage Approval";
+
+    modalBody.innerHTML = `
+      <form onsubmit="App.handleWorkflowSubmit(event)">
+        <div class="form-group">
+          <label class="form-label">Workflow Milestone Stage</label>
+          <select class="form-control" id="wf-stage">
+            <option value="Stage 4: Competent Authority Approval">Stage 4: Competent Authority Approval</option>
+            <option value="Stage 5: Agency Selection & LoI">Stage 5: Agency Selection & LoI</option>
+            <option value="Stage 6: Work Order Execution">Stage 6: Work Order Execution</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Signing Authority</label>
+          <input type="text" class="form-control" value="${this.currentUser.name} (${this.currentUser.designation})" readonly>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Official Sanction Reference Number</label>
+          <input type="text" class="form-control" id="wf-ref" value="MSDE-F.No.18011/04/2026-Media" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Official Approval Note / Orders</label>
+          <textarea class="form-control" id="wf-remarks" required>Approved as recommended by the Technical Evaluation Committee.</textarea>
+        </div>
+        <div style="text-align:right; margin-top:16px;">
+          <button type="submit" class="btn btn-success">Record Official Approval</button>
+        </div>
+      </form>
+    `;
+
+    document.getElementById('preview-modal').classList.add('active');
+  },
+
+  handleWorkflowSubmit(e) {
+    e.preventDefault();
+    const stage = document.getElementById('wf-stage').value;
+    const ref = document.getElementById('wf-ref').value;
+
+    this.closeAllModals();
+    this.showToast(`Approval successfully logged for ${stage}`);
+    this.logAudit("Workflow Approved", `Approved ${stage} (Ref: ${ref})`, "Submitted", "Approved");
+    if (this.currentSection === 'selection-approval') {
+      this.renderSelectionApproval(document.getElementById('main-content'));
+    }
+  },
+
+  // Close Modals
+  closeAllModals() {
+    document.querySelectorAll('.modal-overlay').forEach(m => m.classList.remove('active'));
+  },
+
+  // Toast Notification
+  showToast(message) {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+    const toast = document.createElement('div');
+    toast.className = 'toast';
+    toast.innerHTML = `<span>🛡️</span><span>${message}</span>`;
+    container.appendChild(toast);
+    setTimeout(() => {
+      toast.style.opacity = '0';
+      setTimeout(() => toast.remove(), 300);
+    }, 3500);
+  },
+
+  // Append Audit Log
+  logAudit(action, entity, prevStatus, newStatus) {
+    const logs = window.PM_SETU_DATA.auditLogs;
+    const newLog = {
+      id: `AUD-${1000 + logs.length + 1}`,
+      timestamp: new Date().toLocaleString('en-IN') + ' IST',
+      user: this.currentUser.name,
+      role: this.currentUser.roleName,
+      action: action,
+      entity: entity,
+      previousStatus: prevStatus,
+      newStatus: newStatus,
+      ip: "10.14.20.105 (NIMI Campus Network)",
+      hash: Math.random().toString(36).substring(2, 12)
+    };
+    logs.unshift(newLog);
+  },
+
+  // Global Search
+  handleGlobalSearch(query) {
+    if (!query || query.length < 2) return;
+    const docs = window.PM_SETU_DATA.documents;
+    const matches = docs.filter(d => 
+      d.id.toLowerCase().includes(query) ||
+      d.name.toLowerCase().includes(query) ||
+      d.category.toLowerCase().includes(query) ||
+      d.agency.toLowerCase().includes(query) ||
+      d.owner.toLowerCase().includes(query) ||
+      (d.remarks && d.remarks.toLowerCase().includes(query))
+    );
+
+    if (this.currentSection !== 'master-register') {
+      this.navigate('master-register');
+    }
+
+    // Render search results directly into the table
+    const tableBody = document.querySelector('.data-table tbody');
+    if (tableBody) {
+      if (matches.length === 0) {
+        tableBody.innerHTML = `<tr><td colspan="9" style="text-align:center; padding:24px; color:#64748b;">No documents matching "${query}" found.</td></tr>`;
+      } else {
+        tableBody.innerHTML = matches.map(d => `
+          <tr style="background:#fefce8;">
+            <td><code>${d.id}</code></td>
+            <td><small>${d.category}</small></td>
+            <td><strong>${d.name}</strong><br><small style="color:#64748b;">${d.location}</small></td>
+            <td>${d.agency}</td>
+            <td>${d.date}</td>
+            <td><span class="badge badge-info">${d.version}</span></td>
+            <td><span class="badge ${d.status === 'Approved' ? 'badge-success' : 'badge-warning'}">${d.status}</span></td>
+            <td><span class="badge badge-outline">${d.accessLevel}</span></td>
+            <td>
+              <button class="btn btn-secondary btn-sm" onclick="App.viewDocument('${d.id}')">View</button>
+              ${d.hasRealFile ? `<a href="${d.realPath}" target="_blank" class="btn btn-primary btn-sm">Open File</a>` : ''}
+            </td>
+          </tr>
+        `).join('');
+      }
+    }
+  }
+};
+
+// Bootstrap application on DOM ready
+document.addEventListener('DOMContentLoaded', () => {
+  App.init();
+});
+
+if (typeof window !== "undefined") {
+  window.App = App;
+}
