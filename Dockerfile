@@ -98,7 +98,7 @@ COPY --from=builder /app/dist ./dist
 # ---------------------------------------------------------
 
 COPY --from=builder /app/prisma ./prisma
-
+COPY --from=builder /app/scripts ./scripts
 # ---------------------------------------------------------
 # Copy frontend / public files
 # ---------------------------------------------------------
