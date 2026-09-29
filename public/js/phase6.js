@@ -1,56 +1,107 @@
 const Phase6 = {
 
   fmtDate(d) {
-    return !d
-      ? '—'
-      : new Date(d).toLocaleDateString('en-IN', {
-          day: '2-digit',
-          month: 'short',
-          year: 'numeric'
-        });
+    if (!d) return '—';
+
+    return new Date(d).toLocaleDateString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric'
+    });
   },
 
   async apiFetch(url, opts = {}) {
 
-    if (typeof App !== 'undefined' && App.activeProjectId) {
+    try {
 
-      if (!url.includes('projectId=')) {
-        url += (url.includes('?') ? '&' : '?') +
-          'projectId=' + encodeURIComponent(App.activeProjectId);
-      }
+      // --------------------------------------------------
+      // Add active project ID automatically
+      // --------------------------------------------------
+      if (
+        typeof App !== 'undefined' &&
+        App &&
+        App.activeProjectId
+      ) {
 
-      if (opts.body && typeof opts.body === 'string') {
-        try {
-          const b = JSON.parse(opts.body);
+        if (!url.includes('projectId=')) {
 
-          if (!b.projectId) {
-            b.projectId = App.activeProjectId;
-            opts.body = JSON.stringify(b);
+          url +=
+            (url.includes('?') ? '&' : '?') +
+            'projectId=' +
+            encodeURIComponent(App.activeProjectId);
+        }
+
+        if (
+          opts.body &&
+          typeof opts.body === 'string'
+        ) {
+
+          try {
+
+            const body = JSON.parse(opts.body);
+
+            if (!body.projectId) {
+
+              body.projectId =
+                App.activeProjectId;
+
+              opts.body =
+                JSON.stringify(body);
+            }
+
+          } catch (e) {
+
+            console.warn(
+              'Could not parse request body as JSON.'
+            );
+
           }
-
-        } catch (e) {
-          // Ignore invalid JSON body
         }
       }
+
+      // --------------------------------------------------
+      // API Request
+      // --------------------------------------------------
+      const response = await fetch(url, {
+
+        ...opts,
+
+        headers: {
+          'Content-Type': 'application/json',
+          ...(opts.headers || {})
+        }
+
+      });
+
+      // --------------------------------------------------
+      // Authentication
+      // --------------------------------------------------
+      if (response.status === 401) {
+
+        window.location.href =
+          '/login.html';
+
+        return response;
+      }
+
+      return response;
+
+    } catch (error) {
+
+      console.error(
+        'API Fetch Error:',
+        error
+      );
+
+      throw error;
     }
-
-    const r = await fetch(url, {
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      ...opts
-    });
-
-    if (r.status === 401) {
-      window.location.href = '/login.html';
-      return r;
-    }
-
-    return r;
   },
 
   async renderDashboard(container) {
 
+    // --------------------------------------------------
+    // Loading
+    // --------------------------------------------------
     container.innerHTML = `
       <div style="
         padding:40px;
@@ -63,17 +114,28 @@ const Phase6 = {
 
     try {
 
-      const r = await this.apiFetch('/api/dashboard');
+      // --------------------------------------------------
+      // Load Dashboard API
+      // --------------------------------------------------
+      const response =
+        await this.apiFetch('/api/dashboard');
 
-      if (!r.ok) {
+      // --------------------------------------------------
+      // API Error
+      // --------------------------------------------------
+      if (!response.ok) {
 
-        const errorText = await r.text();
+        const errorText =
+          await response.text();
 
-        console.error('Dashboard API Error:', {
-          status: r.status,
-          statusText: r.statusText,
-          error: errorText
-        });
+        console.error(
+          'Dashboard API Error:',
+          {
+            status: response.status,
+            statusText: response.statusText,
+            error: errorText
+          }
+        );
 
         container.innerHTML = `
           <div style="
@@ -85,14 +147,20 @@ const Phase6 = {
             color:#991b1b;
           ">
 
-            <h3 style="margin-top:0;">
+            <h3 style="
+              margin-top:0;
+            ">
               Dashboard API Error
             </h3>
 
             <p>
               <strong>Status:</strong>
-              ${r.status}
-              ${r.statusText ? ` - ${r.statusText}` : ''}
+              ${response.status}
+              ${
+                response.statusText
+                  ? ` - ${response.statusText}`
+                  : ''
+              }
             </p>
 
             <p>
@@ -115,192 +183,233 @@ const Phase6 = {
         return;
       }
 
-      const data = await r.json();
+      // --------------------------------------------------
+      // Parse API response
+      // --------------------------------------------------
+      const data =
+        await response.json();
 
-      const {
-        kpis,
-        upcomingMonitoring,
-        recentActivity,
-        overdueIssues
-      } = data;
+      const kpis =
+        data?.kpis || {};
 
-      const upcomingMonitoringList =
-        Array.isArray(upcomingMonitoring)
-          ? upcomingMonitoring
+      const upcomingMonitoring =
+        Array.isArray(data?.upcomingMonitoring)
+          ? data.upcomingMonitoring
           : [];
 
-      const recentActivityList =
-        Array.isArray(recentActivity)
-          ? recentActivity
+      const recentActivity =
+        Array.isArray(data?.recentActivity)
+          ? data.recentActivity
           : [];
 
-      const overdueIssuesList =
-        Array.isArray(overdueIssues)
-          ? overdueIssues
+      const overdueIssues =
+        Array.isArray(data?.overdueIssues)
+          ? data.overdueIssues
           : [];
 
-      const upcomingRows = upcomingMonitoringList
-        .map(m => `
-          <div style="
-            padding:12px;
-            border-bottom:1px solid #e2e8f0;
-            display:flex;
-            justify-content:space-between;
-            align-items:center;
-          ">
+      // --------------------------------------------------
+      // KPI objects
+      // --------------------------------------------------
+      const projects =
+        kpis.projects || {};
 
-            <div>
-              <div style="
-                font-weight:600;
-                color:#0b2545;
-              ">
-                ${m.referenceNumber || '—'}
-                -
-                ${m.monitoringType || '—'}
+      const tenders =
+        kpis.tenders || {};
+
+      const contracts =
+        kpis.contracts || {};
+
+      const tecs =
+        kpis.tecs || {};
+
+      const monitoring =
+        kpis.monitoring || {};
+
+      // --------------------------------------------------
+      // Upcoming Monitoring
+      // --------------------------------------------------
+      const upcomingRows =
+        upcomingMonitoring
+          .map(m => `
+
+            <div style="
+              padding:12px;
+              border-bottom:1px solid #e2e8f0;
+              display:flex;
+              justify-content:space-between;
+              align-items:center;
+            ">
+
+              <div>
+
+                <div style="
+                  font-weight:600;
+                  color:#0b2545;
+                ">
+                  ${m.referenceNumber || '—'}
+                  -
+                  ${m.monitoringType || '—'}
+                </div>
+
+                <div style="
+                  font-size:12px;
+                  color:#64748b;
+                ">
+                  Project:
+                  ${m.project?.projectCode || '—'}
+                </div>
+
               </div>
 
               <div style="
-                font-size:12px;
-                color:#64748b;
+                text-align:right;
               ">
-                Project:
-                ${m.project?.projectCode || '—'}
+
+                <div style="
+                  font-size:13px;
+                  color:#0ea5e9;
+                  font-weight:500;
+                ">
+                  ${this.fmtDate(
+                    m.monitoringDate
+                  )}
+                </div>
+
+                <div style="
+                  font-size:11px;
+                  color:#64748b;
+                ">
+                  ${m.location || '—'}
+                </div>
+
               </div>
+
             </div>
 
-            <div style="text-align:right;">
+          `)
+          .join('')
+          ||
+          `
+            <div style="
+              padding:20px;
+              text-align:center;
+              color:#64748b;
+              font-size:13px;
+            ">
+              No upcoming monitoring scheduled.
+            </div>
+          `;
+
+      // --------------------------------------------------
+      // Recent Activity
+      // --------------------------------------------------
+      const activityRows =
+        recentActivity
+          .map(a => `
+
+            <div style="
+              padding:10px 12px;
+              border-bottom:1px solid #e2e8f0;
+            ">
 
               <div style="
                 font-size:13px;
-                color:#0ea5e9;
-                font-weight:500;
+                color:#0b2545;
               ">
-                ${this.fmtDate(m.monitoringDate)}
+                ${a.details || '—'}
               </div>
 
               <div style="
                 font-size:11px;
                 color:#64748b;
+                margin-top:4px;
               ">
-                ${m.location || '—'}
+                ${this.fmtDate(
+                  a.timestamp
+                )}
+                by
+                ${a.user?.username || 'System'}
               </div>
 
             </div>
 
-          </div>
-        `)
-        .join('')
-        ||
-        `
-          <div style="
-            padding:20px;
-            text-align:center;
-            color:#64748b;
-            font-size:13px;
-          ">
-            No upcoming monitoring scheduled.
-          </div>
-        `;
-
-      const activityRows = recentActivityList
-        .map(a => `
-          <div style="
-            padding:10px 12px;
-            border-bottom:1px solid #e2e8f0;
-          ">
-
+          `)
+          .join('')
+          ||
+          `
             <div style="
-              font-size:13px;
-              color:#0b2545;
-            ">
-              ${a.details || '—'}
-            </div>
-
-            <div style="
-              font-size:11px;
+              padding:20px;
+              text-align:center;
               color:#64748b;
-              margin-top:4px;
-            ">
-              ${this.fmtDate(a.timestamp)}
-              by
-              ${a.user?.username || 'System'}
-            </div>
-
-          </div>
-        `)
-        .join('')
-        ||
-        `
-          <div style="
-            padding:20px;
-            text-align:center;
-            color:#64748b;
-            font-size:13px;
-          ">
-            No recent activity.
-          </div>
-        `;
-
-      const overdueRows = overdueIssuesList
-        .map(i => `
-          <div style="
-            padding:10px 12px;
-            border-bottom:1px solid #e2e8f0;
-            border-left:3px solid #ef4444;
-            background:#fef2f2;
-            margin-bottom:8px;
-            border-radius:4px;
-          ">
-
-            <div style="
               font-size:13px;
-              color:#b91c1c;
-              font-weight:600;
             ">
-              Issue ${i.issueNumber || '—'}
+              No recent activity.
             </div>
+          `;
+
+      // --------------------------------------------------
+      // Overdue Issues
+      // --------------------------------------------------
+      const overdueRows =
+        overdueIssues
+          .map(i => `
 
             <div style="
-              font-size:12px;
-              color:#7f1d1d;
-              margin-top:2px;
+              padding:10px 12px;
+              border-bottom:1px solid #e2e8f0;
+              border-left:3px solid #ef4444;
+              background:#fef2f2;
+              margin-bottom:8px;
+              border-radius:4px;
             ">
-              ${i.description || '—'}
+
+              <div style="
+                font-size:13px;
+                color:#b91c1c;
+                font-weight:600;
+              ">
+                Issue ${i.issueNumber || '—'}
+              </div>
+
+              <div style="
+                font-size:12px;
+                color:#7f1d1d;
+                margin-top:2px;
+              ">
+                ${i.description || '—'}
+              </div>
+
+              <div style="
+                font-size:11px;
+                color:#dc2626;
+                margin-top:6px;
+              ">
+                Target:
+                ${this.fmtDate(i.targetDate)}
+                |
+                Ref:
+                ${i.monitoring?.referenceNumber || '—'}
+              </div>
+
             </div>
 
+          `)
+          .join('')
+          ||
+          `
             <div style="
-              font-size:11px;
-              color:#dc2626;
-              margin-top:6px;
+              padding:20px;
+              text-align:center;
+              color:#10b981;
+              font-size:13px;
             ">
-              Target:
-              ${this.fmtDate(i.targetDate)}
-              |
-              Ref:
-              ${i.monitoring?.referenceNumber || '—'}
+              No overdue issues.
             </div>
+          `;
 
-          </div>
-        `)
-        .join('')
-        ||
-        `
-          <div style="
-            padding:20px;
-            text-align:center;
-            color:#10b981;
-            font-size:13px;
-          ">
-            No overdue issues.
-          </div>
-        `;
-
-      const projects = kpis?.projects || {};
-      const tenders = kpis?.tenders || {};
-      const contracts = kpis?.contracts || {};
-      const tecs = kpis?.tecs || {};
-      const monitoring = kpis?.monitoring || {};
-
+      // --------------------------------------------------
+      // Dashboard HTML
+      // --------------------------------------------------
       container.innerHTML = `
 
         <div class="page-header">
@@ -319,12 +428,17 @@ const Phase6 = {
 
         </div>
 
+        <!-- KPI CARDS -->
+
         <div style="
           display:grid;
-          grid-template-columns:repeat(4, 1fr);
+          grid-template-columns:
+            repeat(4, minmax(0, 1fr));
           gap:16px;
           margin-bottom:20px;
         ">
+
+          <!-- PROJECTS -->
 
           <div class="table-card" style="
             padding:20px;
@@ -337,7 +451,7 @@ const Phase6 = {
               text-transform:uppercase;
               color:#64748b;
               font-weight:600;
-              letter-spacing:0.5px;
+              letter-spacing:.5px;
             ">
               Total Projects
             </div>
@@ -355,10 +469,13 @@ const Phase6 = {
               font-size:13px;
               color:#10b981;
             ">
-              ${projects.active ?? 0} Active
+              ${projects.active ?? 0}
+              Active
             </div>
 
           </div>
+
+          <!-- TENDERS -->
 
           <div class="table-card" style="
             padding:20px;
@@ -371,7 +488,7 @@ const Phase6 = {
               text-transform:uppercase;
               color:#64748b;
               font-weight:600;
-              letter-spacing:0.5px;
+              letter-spacing:.5px;
             ">
               Active Tenders
             </div>
@@ -389,10 +506,13 @@ const Phase6 = {
               font-size:13px;
               color:#64748b;
             ">
-              of ${tenders.total ?? 0} Total
+              of ${tenders.total ?? 0}
+              Total
             </div>
 
           </div>
+
+          <!-- CONTRACTS -->
 
           <div class="table-card" style="
             padding:20px;
@@ -405,7 +525,7 @@ const Phase6 = {
               text-transform:uppercase;
               color:#64748b;
               font-weight:600;
-              letter-spacing:0.5px;
+              letter-spacing:.5px;
             ">
               Total Contracts
             </div>
@@ -423,10 +543,13 @@ const Phase6 = {
               font-size:13px;
               color:#64748b;
             ">
-              ${tecs.total ?? 0} TECs Evaluated
+              ${tecs.total ?? 0}
+              TECs Evaluated
             </div>
 
           </div>
+
+          <!-- ISSUES -->
 
           <div class="table-card" style="
             padding:20px;
@@ -439,7 +562,7 @@ const Phase6 = {
               text-transform:uppercase;
               color:#64748b;
               font-weight:600;
-              letter-spacing:0.5px;
+              letter-spacing:.5px;
             ">
               Open Issues
             </div>
@@ -457,28 +580,35 @@ const Phase6 = {
               font-size:13px;
               color:#d97706;
             ">
-              ${monitoring.pendingActions ?? 0} Pending Actions
+              ${monitoring.pendingActions ?? 0}
+              Pending Actions
             </div>
 
           </div>
 
         </div>
 
+        <!-- MAIN CONTENT -->
+
         <div style="
           display:grid;
-          grid-template-columns:2fr 1fr;
+          grid-template-columns:
+            minmax(0, 2fr)
+            minmax(280px, 1fr);
           gap:20px;
         ">
 
           <div>
 
-            <div class="table-card" style="
-              margin-bottom:20px;
-            ">
+            <!-- UPCOMING MONITORING -->
+
+            <div class="table-card"
+                 style="margin-bottom:20px;">
 
               <div class="table-toolbar" style="
                 padding:16px 20px;
-                border-bottom:1px solid #e2e8f0;
+                border-bottom:
+                  1px solid #e2e8f0;
               ">
 
                 <div class="table-title">
@@ -497,11 +627,14 @@ const Phase6 = {
 
             </div>
 
+            <!-- OVERDUE -->
+
             <div class="table-card">
 
               <div class="table-toolbar" style="
                 padding:16px 20px;
-                border-bottom:1px solid #e2e8f0;
+                border-bottom:
+                  1px solid #e2e8f0;
               ">
 
                 <div class="table-title">
@@ -525,15 +658,16 @@ const Phase6 = {
 
           </div>
 
+          <!-- RECENT ACTIVITY -->
+
           <div>
 
-            <div class="table-card" style="
-              height:100%;
-            ">
+            <div class="table-card">
 
               <div class="table-toolbar" style="
                 padding:16px 20px;
-                border-bottom:1px solid #e2e8f0;
+                border-bottom:
+                  1px solid #e2e8f0;
               ">
 
                 <div class="table-title">
@@ -558,14 +692,15 @@ const Phase6 = {
 
       `;
 
-    } catch (e) {
+    } catch (error) {
 
       console.error(
         'Dashboard rendering error:',
-        e
+        error
       );
 
       container.innerHTML = `
+
         <div style="
           margin:30px;
           padding:25px;
@@ -575,7 +710,9 @@ const Phase6 = {
           border-radius:8px;
         ">
 
-          <h3 style="margin-top:0;">
+          <h3 style="
+            margin-top:0;
+          ">
             Error rendering dashboard
           </h3>
 
@@ -590,13 +727,19 @@ const Phase6 = {
             border:1px solid #e5e7eb;
             border-radius:6px;
             overflow:auto;
-          ">${e?.message || e}</pre>
+          ">${error?.message || error}</pre>
 
         </div>
+
       `;
     }
   }
 };
+
+
+// ------------------------------------------------------
+// Global export
+// ------------------------------------------------------
 
 if (typeof window !== 'undefined') {
   window.Phase6 = Phase6;
