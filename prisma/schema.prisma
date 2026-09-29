@@ -1,463 +1,456 @@
-datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-}
+```javascript
+const Phase6 = {
 
-generator client {
-  provider = "prisma-client-js"
-}
+  // =========================================================
+  // DATE FORMATTER
+  // =========================================================
 
-model User {
-  id           String       @id @default(uuid())
-  username     String       @unique
-  email        String       @unique
-  passwordHash String
-  roleId       String
-  role         Role         @relation(fields: [roleId], references: [id])
-  active       Boolean      @default(true)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  AuditLog     AuditLog[]
-  projectsCreated  Project[] @relation("ProjectCreatedBy")
-  projectsUpdated  Project[] @relation("ProjectUpdatedBy")
-  tendersCreated   Tender[]  @relation("TenderCreatedBy")
-  tendersUpdated   Tender[]  @relation("TenderUpdatedBy")
-  tecsCreated      Tec[]     @relation("TecCreatedBy")
-  tecsUpdated      Tec[]     @relation("TecUpdatedBy")
-  contractsCreated Contract[] @relation("ContractCreatedBy")
-  contractsUpdated Contract[] @relation("ContractUpdatedBy")
-  docsCreated      Document[] @relation("DocumentCreatedBy")
-  docsUpdated      Document[] @relation("DocumentUpdatedBy")
-  docVersCreated   DocumentVersion[] @relation("DocVersionCreatedBy")
-}
+  fmtDate(d) {
+    if (!d) return '—';
 
-model Role {
-  id              String           @id @default(uuid())
-  name            String           @unique
-  description     String?
-  users           User[]
-  rolePermissions RolePermission[]
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-}
+    const date = new Date(d);
 
-model Permission {
-  id              String           @id @default(uuid())
-  action          String           // CREATE, READ, UPDATE, DELETE
-  module          String           // PROJECTS, USERS, etc.
-  rolePermissions RolePermission[]
-  createdAt       DateTime         @default(now())
-}
+    if (Number.isNaN(date.getTime())) {
+      return '—';
+    }
 
-model RolePermission {
-  roleId       String
-  permissionId String
-  role         Role       @relation(fields: [roleId], references: [id])
-  permission   Permission @relation(fields: [permissionId], references: [id])
+    return date.toLocaleDateString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric'
+    });
+  },
 
-  @@id([roleId, permissionId])
-}
 
-model FinancialYear {
-  id        String   @id @default(uuid())
-  year      String   @unique // e.g. 2026-27
-  active    Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  projects  Project[]
-}
+  // =========================================================
+  // API FETCH HELPER
+  // =========================================================
 
-model AuditLog {
-  id        String   @id @default(uuid())
-  userId    String?
-  user      User?    @relation(fields: [userId], references: [id])
-  action    String
-  module    String
-  recordId  String?
-  details   String?
-  ipAddress String?
-  projectId String?
-  project   Project? @relation(fields: [projectId], references: [id])
-  createdAt DateTime @default(now())
-}
+  async apiFetch(url, opts = {}) {
 
-model Setting {
-  id        String   @id @default(uuid())
-  key       String   @unique
-  value     String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
+    // -------------------------------------------------------
+    // Add active project ID to URL
+    // -------------------------------------------------------
 
-// ─── PHASE 2: PROJECTS & TENDERS ─────────────────────────────────────────────
+    if (
+      typeof App !== 'undefined' &&
+      App &&
+      App.activeProjectId
+    ) {
 
-model Project {
-  id                   String    @id @default(uuid())
-  projectCode          String    @unique
-  projectName          String
-  description          String?
-  projectType          String?
-  projectCategory      String?
-  department           String?
-  division             String?
-  officeUnit           String?
-  responsibleOfficer   String?
-  state                String?
-  district             String?
-  block                String?
-  village              String?
-  siteLocation         String?
-  estimatedCost        Float?
-  sanctionedAmount     Float?
-  budgetHead           String?
-  fundingSource        String?
-  financialYearId      String?
-  financialYear        FinancialYear? @relation(fields: [financialYearId], references: [id])
-  startDate            DateTime?
-  expectedCompletion   DateTime?
-  actualCompletion     DateTime?
-  status               String    @default("Draft")
-  remarks              String?
-  deletedAt            DateTime?
-  createdById          String?
-  createdBy            User?     @relation("ProjectCreatedBy", fields: [createdById], references: [id])
-  updatedById          String?
-  updatedBy            User?     @relation("ProjectUpdatedBy", fields: [updatedById], references: [id])
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
-  tenders              Tender[]
-  tecs                 Tec[]
-  contracts            Contract[]
-  documents            Document[]
-  monitoring           Monitoring[]
-  auditLogs            AuditLog[]
+      if (!url.includes('projectId=')) {
+        url +=
+          (url.includes('?') ? '&' : '?') +
+          'projectId=' +
+          encodeURIComponent(App.activeProjectId);
+      }
 
-  @@index([projectCode])
-  @@index([status])
-  @@index([financialYearId])
-}
 
-model Tender {
-  id                  String    @id @default(uuid())
-  tenderNumber        String    @unique
-  tenderTitle         String
-  description         String?
-  tenderType          String?
-  procurementMethod   String?
-  tenderCategory      String?
-  estimatedValue      Float?
-  tenderFee           Float?
-  emdAmount           Float?
-  publishDate         DateTime?
-  submissionStartDate DateTime?
-  submissionEndDate   DateTime?
-  bidOpeningDate      DateTime?
-  status              String    @default("Draft")
-  remarks             String?
-  deletedAt           DateTime?
-  projectId           String
-  project             Project   @relation(fields: [projectId], references: [id])
-  createdById         String?
-  createdBy           User?     @relation("TenderCreatedBy", fields: [createdById], references: [id])
-  updatedById         String?
-  updatedBy           User?     @relation("TenderUpdatedBy", fields: [updatedById], references: [id])
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
-  tecs                Tec[]
-  contracts           Contract[]
-  documents           Document[]
-  monitoring          Monitoring[]
+      // -----------------------------------------------------
+      // Add projectId to JSON request body
+      // -----------------------------------------------------
 
-  @@index([tenderNumber])
-  @@index([status])
-  @@index([projectId])
-}
+      if (
+        opts.body &&
+        typeof opts.body === 'string'
+      ) {
 
-// ─── PHASE 3: TEC & CONTRACT ─────────────────────────────────────────────────
+        try {
 
-model Tec {
-  id                  String       @id @default(uuid())
-  tecReference        String       @unique
-  committeeName       String
-  formationDate       DateTime?
-  orderNumber         String?
-  description         String?
-  evalStartDate       DateTime?
-  evalEndDate         DateTime?
-  status              String       @default("Draft")
-  recommendation      String?
-  remarks             String?
-  deletedAt           DateTime?
-  projectId           String?
-  project             Project?     @relation(fields: [projectId], references: [id])
-  tenderId            String
-  tender              Tender       @relation(fields: [tenderId], references: [id])
-  createdById         String?
-  createdBy           User?        @relation("TecCreatedBy", fields: [createdById], references: [id])
-  updatedById         String?
-  updatedBy           User?        @relation("TecUpdatedBy", fields: [updatedById], references: [id])
-  createdAt           DateTime     @default(now())
-  updatedAt           DateTime     @updatedAt
-  members             TecMember[]
-  documents           Document[]
+          const body = JSON.parse(opts.body);
 
-  @@index([tecReference])
-  @@index([status])
-  @@index([tenderId])
-}
+          if (!body.projectId) {
 
-model TecMember {
-  id                  String    @id @default(uuid())
-  name                String
-  designation         String?
-  department          String?
-  role                String?
-  remarks             String?
-  tecId               String
-  tec                 Tec       @relation(fields: [tecId], references: [id])
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+            body.projectId = App.activeProjectId;
 
-  @@index([tecId])
-}
+            opts.body = JSON.stringify(body);
+          }
 
-model Contract {
-  id                  String    @id @default(uuid())
-  contractNumber      String    @unique
-  contractTitle       String
-  contractType        String?
-  contractorName      String
-  contractorIdNumber  String?
-  contractorAddress   String?
-  contractAmount      Float?
-  performanceSecurity Float?
-  paymentTerms        String?
-  fundingSource       String?
-  awardDate           DateTime?
-  agreementDate       DateTime?
-  startDate           DateTime?
-  endDate             DateTime?
-  contractDuration    String?
-  status              String    @default("Draft")
-  deletedAt           DateTime?
-  projectId           String?
-  project             Project?  @relation(fields: [projectId], references: [id])
-  tenderId            String
-  tender              Tender    @relation(fields: [tenderId], references: [id])
-  createdById         String?
-  createdBy           User?     @relation("ContractCreatedBy", fields: [createdById], references: [id])
-  updatedById         String?
-  updatedBy           User?     @relation("ContractUpdatedBy", fields: [updatedById], references: [id])
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
-  documents           Document[]
-  monitoring          Monitoring[]
+        } catch (e) {
 
-  @@index([contractNumber])
-  @@index([status])
-  @@index([tenderId])
-}
+          // Invalid JSON body.
+          // Leave the original body unchanged.
+        }
+      }
+    }
 
-// ─── PHASE 4: DOCUMENT MANAGEMENT ────────────────────────────────────────────
 
-model Document {
-  id              String             @id @default(uuid())
-  title           String
-  fileName        String
-  fileExtension   String?
-  mimeType        String?
-  fileSize        Int?               // bytes
-  storageKey      String?
-  category        String?
-  documentType    String?
-  description     String?
-  status          String             @default("Active")
-  versionNumber   Int                @default(1)
-  
-  projectId       String?
-  project         Project?           @relation(fields: [projectId], references: [id])
-  tenderId        String?
-  tender          Tender?            @relation(fields: [tenderId], references: [id])
-  tecId           String?
-  tec             Tec?               @relation(fields: [tecId], references: [id])
-  contractId      String?
-  contract        Contract?          @relation(fields: [contractId], references: [id])
-  monitoringId    String?
-  monitoring      Monitoring?        @relation(fields: [monitoringId], references: [id])
+    // -------------------------------------------------------
+    // API Request
+    // -------------------------------------------------------
 
-  versions        DocumentVersion[]
+    const response = await fetch(url, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...(opts.headers || {})
+      },
+      ...opts
+    });
 
-  deletedAt       DateTime?
-  createdById     String?
-  createdBy       User?              @relation("DocumentCreatedBy", fields: [createdById], references: [id])
-  updatedById     String?
-  updatedBy       User?              @relation("DocumentUpdatedBy", fields: [updatedById], references: [id])
-  createdAt       DateTime           @default(now())
-  updatedAt       DateTime           @updatedAt
 
-  @@index([projectId])
-  @@index([tenderId])
-  @@index([tecId])
-  @@index([contractId])
-  @@index([monitoringId])
-  @@index([category])
-  @@index([documentType])
-}
+    // -------------------------------------------------------
+    // Authentication error
+    // -------------------------------------------------------
 
-model DocumentVersion {
-  id              String    @id @default(uuid())
-  documentId      String
-  document        Document  @relation(fields: [documentId], references: [id])
-  versionNumber   Int
-  fileName        String
-  fileSize        Int?
-  mimeType        String?
-  storageKey      String
-  notes           String?
-  
-  createdById     String?
-  createdBy       User?     @relation("DocVersionCreatedBy", fields: [createdById], references: [id])
-  createdAt       DateTime  @default(now())
+    if (response.status === 401) {
 
-  @@index([documentId])
-}
+      window.location.href = '/login.html';
 
-// ─── PHASE 5: VIDEO LINKS & MONITORING ────────────────────────────────────────
+      return response;
+    }
 
-model Monitoring {
-  id              String    @id @default(uuid())
-  referenceNumber String    @unique
-  projectId       String
-  project         Project   @relation(fields: [projectId], references: [id])
-  tenderId        String?
-  tender          Tender?   @relation(fields: [tenderId], references: [id])
-  contractId      String?
-  contract        Contract? @relation(fields: [contractId], references: [id])
-  
-  monitoringType  String
-  monitoringDate  DateTime
-  startTime       String?
-  endTime         String?
-  officer         String?
-  team            String?
-  location        String?
-  purpose         String?
-  description     String?
-  status          String    @default("Scheduled")
 
-  overallObservation String?
-  overallStatus      String?
-  recommendationsSum String?
-  remarks            String?
+    return response;
+  },
 
-  documents       Document[]
-  videoLinks      VideoLink[]
-  observations    Observation[]
-  issues          Issue[]
-  recommendations Recommendation[]
-  actions         FollowUpAction[]
 
-  deletedAt       DateTime?
-  createdById     String?
-  updatedById     String?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  // =========================================================
+  // RENDER DASHBOARD
+  // =========================================================
 
-  @@index([projectId])
-  @@index([tenderId])
-  @@index([contractId])
-  @@index([status])
-}
+  async renderDashboard(container) {
 
-model VideoLink {
-  id            String     @id @default(uuid())
-  monitoringId  String
-  monitoring    Monitoring @relation(fields: [monitoringId], references: [id])
-  title         String
-  platform      String
-  url           String
-  sessionDate   DateTime?
-  startTime     String?
-  endTime       String?
-  description   String?
-  status        String     @default("Active")
-  
-  createdById   String?
-  createdAt     DateTime   @default(now())
+    if (!container) {
+      console.error(
+        'Phase6: Dashboard container not found.'
+      );
+      return;
+    }
 
-  @@index([monitoringId])
-}
 
-model Observation {
-  id              String     @id @default(uuid())
-  monitoringId    String
-  monitoring      Monitoring @relation(fields: [monitoringId], references: [id])
-  category        String?
-  description     String
-  severity        String?
-  observationDate DateTime?
-  recordedBy      String?
-  remarks         String?
-  status          String     @default("Open")
+    // -------------------------------------------------------
+    // Loading state
+    // -------------------------------------------------------
 
-  createdAt       DateTime   @default(now())
+    container.innerHTML = `
+      <div style="
+        padding:40px;
+        text-align:center;
+        color:#64748b;
+      ">
+        <div style="
+          font-size:32px;
+          margin-bottom:10px;
+        ">
+          ⏳
+        </div>
 
-  @@index([monitoringId])
-}
+        <div style="
+          font-size:15px;
+          font-weight:500;
+        ">
+          Loading Dashboard...
+        </div>
+      </div>
+    `;
 
-model Issue {
-  id               String     @id @default(uuid())
-  monitoringId     String
-  monitoring       Monitoring @relation(fields: [monitoringId], references: [id])
-  issueNumber      String
-  description      String
-  category         String?
-  severity         String?
-  dateIdentified   DateTime?
-  responsiblePerson String?
-  targetDate       DateTime?
-  status           String     @default("Open")
-  resolutionDate   DateTime?
-  resolutionRemarks String?
 
-  createdAt        DateTime   @default(now())
-  updatedAt        DateTime   @updatedAt
+    try {
 
-  @@index([monitoringId])
-}
+      // =====================================================
+      // LOAD DASHBOARD DATA
+      // =====================================================
 
-model Recommendation {
-  id                  String     @id @default(uuid())
-  monitoringId        String
-  monitoring          Monitoring @relation(fields: [monitoringId], references: [id])
-  recommendationText  String
-  priority            String?
-  responsiblePerson   String?
-  targetDate          DateTime?
-  status              String     @default("Pending")
-  remarks             String?
+      const response =
+        await this.apiFetch('/api/dashboard');
 
-  createdAt           DateTime   @default(now())
 
-  @@index([monitoringId])
-}
+      // =====================================================
+      // HANDLE API ERROR
+      // =====================================================
 
-model FollowUpAction {
-  id                 String     @id @default(uuid())
-  monitoringId       String
-  monitoring         Monitoring @relation(fields: [monitoringId], references: [id])
-  actionNumber       String
-  description        String
-  assignedTo         String?
-  assignedDepartment String?
-  dueDate            DateTime?
-  priority           String?
-  status             String     @default("Pending")
-  completionDate     DateTime?
-  completionRemarks  String?
+      if (!response.ok) {
 
-  createdAt          DateTime   @default(now())
-  updatedAt          DateTime   @updatedAt
+        const errorText =
+          await response.text();
 
-  @@index([monitoringId])
-}
+        console.error(
+          'Dashboard API Error:',
+          {
+            status: response.status,
+            statusText: response.statusText,
+            error: errorText
+          }
+        );
+
+
+        let displayMessage =
+          'Dashboard could not be loaded.';
+
+
+        // Try to read JSON error
+        try {
+
+          const errorData =
+            JSON.parse(errorText);
+
+          if (errorData.message) {
+            displayMessage =
+              errorData.message;
+          }
+
+        } catch (e) {
+
+          if (errorText) {
+            displayMessage =
+              errorText;
+          }
+        }
+
+
+        container.innerHTML = `
+          <div style="
+            margin:30px;
+            padding:25px;
+            color:#991b1b;
+            background:#fef2f2;
+            border:1px solid #fecaca;
+            border-radius:8px;
+          ">
+
+            <h3 style="
+              margin-top:0;
+              margin-bottom:12px;
+            ">
+              ⚠️ Dashboard API Error
+            </h3>
+
+            <p>
+              <strong>Status:</strong>
+              ${response.status}
+              ${response.statusText
+                ? ` - ${response.statusText}`
+                : ''}
+            </p>
+
+            <p>
+              <strong>Message:</strong>
+              ${displayMessage}
+            </p>
+
+            <details style="
+              margin-top:15px;
+            ">
+
+              <summary style="
+                cursor:pointer;
+                font-weight:600;
+              ">
+                Technical Response
+              </summary>
+
+              <pre style="
+                margin-top:10px;
+                background:#fff;
+                padding:15px;
+                border:1px solid #e5e7eb;
+                border-radius:6px;
+                white-space:pre-wrap;
+                overflow:auto;
+                text-align:left;
+              ">${errorText || 'No response body returned.'}</pre>
+
+            </details>
+
+            <button
+              onclick="window.location.reload()"
+              style="
+                margin-top:15px;
+                padding:9px 16px;
+                border:none;
+                border-radius:6px;
+                background:#0b2545;
+                color:#fff;
+                cursor:pointer;
+              "
+            >
+              🔄 Retry
+            </button>
+
+          </div>
+        `;
+
+        return;
+      }
+
+
+      // =====================================================
+      // PARSE SUCCESSFUL RESPONSE
+      // =====================================================
+
+      const data =
+        await response.json();
+
+
+      console.log(
+        'Dashboard API Response:',
+        data
+      );
+
+
+      // =====================================================
+      // SAFE DATA EXTRACTION
+      // =====================================================
+
+      const kpis =
+        data?.kpis || {};
+
+
+      const projects =
+        kpis.projects || {};
+
+
+      const tenders =
+        kpis.tenders || {};
+
+
+      const contracts =
+        kpis.contracts || {};
+
+
+      const tecs =
+        kpis.tecs || {};
+
+
+      const monitoring =
+        kpis.monitoring || {};
+
+
+      const upcomingMonitoring =
+        Array.isArray(data?.upcomingMonitoring)
+          ? data.upcomingMonitoring
+          : [];
+
+
+      const recentActivity =
+        Array.isArray(data?.recentActivity)
+          ? data.recentActivity
+          : [];
+
+
+      const overdueIssues =
+        Array.isArray(data?.overdueIssues)
+          ? data.overdueIssues
+          : [];
+
+
+      // =====================================================
+      // UPCOMING MONITORING ROWS
+      // =====================================================
+
+      const upcomingRows =
+        upcomingMonitoring
+          .map(m => {
+
+            return `
+              <div style="
+                padding:12px;
+                border-bottom:1px solid #e2e8f0;
+                display:flex;
+                justify-content:space-between;
+                align-items:center;
+                gap:15px;
+              ">
+
+                <div style="
+                  min-width:0;
+                ">
+
+                  <div style="
+                    font-weight:600;
+                    color:#0b2545;
+                    margin-bottom:4px;
+                  ">
+                    ${m?.referenceNumber || '—'}
+                    -
+                    ${m?.monitoringType || '—'}
+                  </div>
+
+                  <div style="
+                    font-size:12px;
+                    color:#64748b;
+                  ">
+                    Project:
+                    ${m?.project?.projectCode || '—'}
+                  </div>
+
+                </div>
+
+
+                <div style="
+                  text-align:right;
+                  flex-shrink:0;
+                ">
+
+                  <div style="
+                    font-size:13px;
+                    color:#0ea5e9;
+                    font-weight:500;
+                  ">
+                    ${this.fmtDate(m?.monitoringDate)}
+                  </div>
+
+                  <div style="
+                    font-size:11px;
+                    color:#64748b;
+                    margin-top:3px;
+                  ">
+                    ${m?.location || '—'}
+                  </div>
+
+                </div>
+
+              </div>
+            `;
+
+          })
+          .join('');
+
+
+      const upcomingContent =
+        upcomingRows ||
+        `
+          <div style="
+            padding:20px;
+            text-align:center;
+            color:#64748b;
+            font-size:13px;
+          ">
+            No upcoming monitoring scheduled.
+          </div>
+        `;
+
+
+      // =====================================================
+      // RECENT ACTIVITY ROWS
+      // =====================================================
+
+      const activityRows =
+        recentActivity
+          .map(a => {
+
+            const username =
+              a?.user?.username ||
+              'System';
+
+
+            return `
+              <div style="
+                padding:10px 12px;
+                border-bottom:1px solid #e2e8f0;
+              ">
+
+                <div style="
+                  font-size:13px;
+                  color:#0b2545;
+                ">
+                  ${a?.details || '—'}
+                </div>
+
+                <div style="
+                  font-size:11px;
+                  color:#64748b;
+                  margin-top:4px;
+                ">
+                  ${this.
+```
